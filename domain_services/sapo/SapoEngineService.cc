@@ -206,6 +206,11 @@ bool SapoEngineService::configure(const SapoSettings &settings) {
 
         // Outbound HTTP from blueprints reuses Drogon's client/IO loops.
         services.transport = std::make_shared<HostDrogonTransport>();
+        // Built-in data sources (context/mock/http) were composed with the
+        // default transport above; re-point them at ours, otherwise `query`
+        // nodes on the http source die inside NullTransport ("no HTTP
+        // transport is compiled in") while `command` http.* calls work.
+        services.data_sources = sapo::data::DataSourceRegistry::withBuiltIns(services.transport);
 
         // Provider config first: it carries bindings and engine limits
         // (never the Redis URL — see the state_redis NOTE below).
@@ -216,7 +221,13 @@ bool SapoEngineService::configure(const SapoSettings &settings) {
                 for (const auto &problem : store.validate()) {
                     LOG_WARN << "[sapo] provider config: " << problem;
                 }
-                services.bindings = store.bindingProvider();
+                // Layer the file bindings OVER the environment bindings (never
+                // replace): blueprints may use env.* alongside config.* and
+                // secret.*, and defaults() only installed the env provider.
+                auto composite = std::make_shared<sapo::runtime::CompositeBindingProvider>();
+                composite->add(store.bindingProvider());
+                composite->add(sapo::runtime::defaultBindingProvider());
+                services.bindings = std::move(composite);
                 providerConfig = std::make_shared<sapo::config::ProviderConfigStore>(std::move(store));
                 services.provider_config = providerConfig;
                 services.applySecretRedaction();
