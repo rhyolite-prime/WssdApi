@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # End-to-end smoke test for the Sapo-backed USSD webhooks.
 #
-# No database or Redis required: with no wssd_registry rows the API serves
-# sapo/workflows/default.json, and sessions persist in the local file store.
+# Requires PostgreSQL with wssd_registry rows for the dialed codes (static
+# file blueprints were removed, so there is no file fallback; demo cases
+# 9-12 need a `wssd-demo` row). Sessions persist in the local file store
+# unless redis_url is configured.
 #
 # Usage (from the repo root):
 #   ./build/WssdApi &                      # terminal 1: run the API
