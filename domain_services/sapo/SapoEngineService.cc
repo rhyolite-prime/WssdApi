@@ -306,7 +306,10 @@ std::vector<std::string> SapoEngineService::start() {
         workflowIds += id;
     }
     LOG_INFO << "[sapo] engine started (workflows=" << vm_->workflows().size() << " [" << workflowIds
-             << "], store=" << vm_->services().state_store->kind() << ")";
+             << "], store=" << vm_->services().state_store->kind() << ", http="
+             << (vm_->services().transport != nullptr ? vm_->services().transport->name()
+                                                      : std::string("<none>"))
+             << ")";
     return {};
 }
 

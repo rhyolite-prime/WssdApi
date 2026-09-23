@@ -43,6 +43,12 @@ class HostDrogonTransport final : public sapo::http::IHttpTransport {
             response.transport_error = "drogon transport does not support HTTP method: " + request.method;
             return finish(response, started);
         }
+        // One line per outbound call (INFO, not DEBUG: blueprints typically
+        // swallow HTTP failures into on_error branches, so without this the
+        // service log shows nothing at all). The query string is stripped —
+        // it is the usual place for tokens and subscriber ids.
+        LOG_INFO << "[sapo] http " << request.method << " "
+                 << request.url.substr(0, request.url.find('?'));
         const long timeoutMs = request.timeout_ms > 0 ? request.timeout_ms : 10000;
         const double timeoutSec = static_cast<double>(timeoutMs) / 1000.0;
 
@@ -169,6 +175,11 @@ class HostDrogonTransport final : public sapo::http::IHttpTransport {
                                        std::chrono::steady_clock::time_point started) {
         const auto elapsed = std::chrono::steady_clock::now() - started;
         response.elapsed_ms = std::chrono::duration<double, std::milli>(elapsed).count();
+        // Every exit funnels through here, so this one line captures failures
+        // even when the blueprint swallows them into an on_error branch.
+        if (!response.transport_error.empty()) {
+            LOG_WARN << "[sapo] http call failed: " << response.transport_error;
+        }
         return response;
     }
 
