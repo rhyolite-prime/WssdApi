@@ -47,6 +47,7 @@ class UssdSessionOrchestrator {
 
     SapoSettings settings_;
     UssdWorkflowResolver resolver_;
+    UssdFlowBindingStore bindings_;
 };
 
 }  // namespace wssd_api::sapo_host
