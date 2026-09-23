@@ -67,6 +67,8 @@ add_executable(${PROJECT_NAME} main.cc
         domain_services/sapo/SapoEngineService.cc
         domain_services/sapo/UssdWorkflowResolver.h
         domain_services/sapo/UssdWorkflowResolver.cc
+        domain_services/sapo/UssdFlowBindingStore.h
+        domain_services/sapo/UssdFlowBindingStore.cc
         domain_services/sapo/ProviderAdapters.h
         domain_services/sapo/ProviderAdapters.cc
         domain_services/sapo/UssdSessionOrchestrator.h

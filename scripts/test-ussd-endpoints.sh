@@ -84,9 +84,11 @@ expect_code 200 "nalo dial" && {
     expect_jq '.SESSIONID == "'"$NALO_SESSION"'"' "nalo dial echoes SESSIONID"
 }
 
+# NOTE: the continuation deliberately sends a bogus SESSIONID — the Nalo
+# session is anchored on the MSISDN, so the flow must continue regardless.
 post /api/v1/ussd-interaction/nalo "$(cat <<JSON
 {"USERID": "wssd-test", "MSISDN": "233241234567", "USERDATA": "1",
- "MSGTYPE": true, "NETWORK": "MTN", "SESSIONID": "$NALO_SESSION"}
+ "MSGTYPE": true, "NETWORK": "MTN", "SESSIONID": "bogus-ignored-$TS"}
 JSON
 )"
 expect_code 200 "nalo continue" && {
@@ -105,7 +107,7 @@ JSON
 expect_code 200 "nalo invalid-choice dial" || true
 post /api/v1/ussd-interaction/nalo "$(cat <<JSON
 {"USERID": "wssd-test", "MSISDN": "233241234567", "USERDATA": "9",
- "MSGTYPE": true, "NETWORK": "MTN", "SESSIONID": "$NALO_SESSION_INVALID"}
+ "MSGTYPE": true, "NETWORK": "MTN", "SESSIONID": "bogus-ignored-invalid-$TS"}
 JSON
 )"
 expect_code 200 "nalo invalid choice" && {
@@ -151,9 +153,15 @@ expect_code 200 "hubtel release" && {
     expect_jq '.Type == "Release"' "hubtel release acknowledged"
 }
 
-# 6+7. Validation still 400s on malformed gateway payloads
-post /api/v1/ussd-interaction/nalo '{"USERID": "wssd-test", "MSISDN": "23324"}'
-expect_code 400 "nalo missing SESSIONID -> 400" && {
+# 6-8. Nalo SESSIONID is optional (MSISDN-anchored sessions); the
+# subscriber and service key are still mandatory.
+post /api/v1/ussd-interaction/nalo '{"USERID": "wssd-test", "MSISDN": "233249999999", "USERDATA": "*123#", "NETWORK": "MTN"}'
+expect_code 200 "nalo without SESSIONID works" && {
+    expect_jq '.MSGTYPE == true' "nalo SESSIONID-less dial keeps session open"
+    expect_jq '.MSG | contains("Welcome")' "nalo SESSIONID-less dial renders menu"
+}
+post /api/v1/ussd-interaction/nalo '{"USERID": "wssd-test", "USERDATA": "*123#"}'
+expect_code 400 "nalo missing MSISDN -> 400" && {
     expect_jq '.success == false' "nalo 400 body reports success=false"
 }
 post /api/v1/ussd-interaction/hubtel '{"Type": "Response"}'
@@ -161,7 +169,7 @@ expect_code 400 "hubtel missing SessionId/Mobile -> 400" && {
     expect_jq '.success == false' "hubtel 400 body reports success=false"
 }
 
-# 8-11. Multi-step demo flow (ServiceCode wssd-demo -> sapo/workflows/wssd-demo.json)
+# 9-12. Multi-step demo flow (ServiceCode wssd-demo -> sapo/workflows/wssd-demo.json)
 DEMO_SESSION="demo-e2e-$TS"
 demo_turn() { # $1=message $2=sequence
     post /api/v1/ussd-interaction/hubtel "$(cat <<JSON

@@ -99,15 +99,20 @@ class SapoEngineService {
 
     /// One USSD turn: resumes the Sapo session when it is resumable,
     /// otherwise starts `workflowId` under the deterministic session id.
-    /// A resume that fails (e.g. checkpoint expired between lookup and
-    /// resume) is retried once as a fresh start instead of failing the
-    /// subscriber. Never throws: engine exceptions become failed outcomes.
+    /// `forceStart` (flow initiation: Hubtel Initiation, Nalo dial string)
+    /// skips the resume lookup and always starts fresh, so a redial
+    /// mid-flow restarts the conversation instead of feeding the dial
+    /// string back in as a menu reply. A resume that fails (e.g.
+    /// checkpoint expired between lookup and resume) is retried once as a
+    /// fresh start instead of failing the subscriber. Never throws: engine
+    /// exceptions become failed outcomes.
     sapo::runtime::ExecutionOutcome executeUssdTurn(const std::string &workflowId,
                                                      const std::string &sapoSessionId,
                                                      nlohmann::json baseInput,
                                                      const std::string &rawInput,
                                                      const std::string &dialCode,
-                                                     const std::string &correlationId);
+                                                     const std::string &correlationId,
+                                                     bool forceStart = false);
 
     [[nodiscard]] std::optional<sapo::runtime::SessionSnapshot> findSession(
         const std::string &sapoSessionId) const;

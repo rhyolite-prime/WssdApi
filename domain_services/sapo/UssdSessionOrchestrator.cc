@@ -21,7 +21,11 @@
 namespace wssd_api::sapo_host {
 
 UssdSessionOrchestrator::UssdSessionOrchestrator(SapoSettings settings)
-    : settings_(std::move(settings)), resolver_(settings_) {}
+    : settings_(std::move(settings)),
+      resolver_(settings_),
+      bindings_(settings_.redisUrl, settings_.redisTtlSeconds, settings_.redisPoolSize) {
+    LOG_INFO << "[ussd] flow bindings via " << (bindings_.usingRedis() ? "redis" : "in-memory store");
+}
 
 drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &interaction) {
     auto &engine = SapoEngineService::instance();
@@ -38,7 +42,53 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
         co_return std::move(result);
     }
 
-    auto resolved = co_await resolver_.resolve(interaction.serviceKey, interaction.dialCode);
+    const std::string sapoSessionId = sapoSessionIdFor(interaction);
+
+    if (interaction.isRelease) {
+        co_await BlockingRunner::instance().run([this, &engine, sapoSessionId] {
+            engine.cancelSession(sapoSessionId, "gateway release");
+            bindings_.remove(sapoSessionId);
+        });
+        UssdResult result;
+        result.cont = false;
+        result.message = "Session ended.";
+        result.clientState = "End";
+        result.label = "Session ended.";
+        result.sapoSessionId = sapoSessionId;
+        result.status = "cancelled";
+        co_await auditSession(interaction, result);
+        co_return std::move(result);
+    }
+
+    // Initiation turns resolve the flow from the dialed service and pin it
+    // to the session; continuations read the pinned binding back (the dial
+    // string is gone by then — USERDATA carries only the menu reply). A
+    // missed binding (expired, cold store) falls back to resolving from
+    // the request, exactly as before.
+    std::optional<ResolvedWorkflow> resolved;
+    // Continuations recover the initiation dial string from the pinned
+    // binding, so $dial_code/$ussd_code stay stable across turns.
+    std::string dialCode = interaction.dialCode;
+    if (!interaction.isStart) {
+        auto bound = co_await BlockingRunner::instance().run([this, sapoSessionId] {
+            return bindings_.find(sapoSessionId);
+        });
+        if (bound.has_value()) {
+            LOG_DEBUG << "[ussd] session " << sapoSessionId << " continues bound workflow "
+                      << bound->workflowId;
+            ResolvedWorkflow pinned;
+            pinned.workflowId = bound->workflowId;
+            pinned.blueprintJson = bound->blueprintJson;
+            pinned.matchedKey = "session-binding";
+            resolved = std::move(pinned);
+            if (!bound->dialCode.empty()) {
+                dialCode = bound->dialCode;
+            }
+        }
+    }
+    if (!resolved.has_value()) {
+        resolved = co_await resolver_.resolve(interaction.serviceKey, interaction.dialCode);
+    }
     if (!resolved.has_value()) {
         UssdResult result = unavailable("Service not available for this code. Please try again later.");
         co_await auditSession(interaction, result);
@@ -55,22 +105,15 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
         co_return std::move(result);
     }
 
-    const std::string sapoSessionId = sapoSessionIdFor(interaction);
-
-    if (interaction.isRelease) {
-        co_await BlockingRunner::instance().run([&engine, sapoSessionId] {
-            engine.cancelSession(sapoSessionId, "gateway release");
+    if (interaction.isStart) {
+        UssdFlowBinding binding;
+        binding.workflowId = workflowId;
+        binding.blueprintJson = resolved->blueprintJson;
+        binding.serviceKey = interaction.serviceKey;
+        binding.dialCode = interaction.dialCode;
+        co_await BlockingRunner::instance().run([this, sapoSessionId, binding] {
+            bindings_.save(sapoSessionId, binding);
         });
-        UssdResult result;
-        result.cont = false;
-        result.message = "Session ended.";
-        result.clientState = "End";
-        result.label = "Session ended.";
-        result.sapoSessionId = sapoSessionId;
-        result.workflowId = workflowId;
-        result.status = "cancelled";
-        co_await auditSession(interaction, result);
-        co_return std::move(result);
     }
 
     nlohmann::json baseInput = nlohmann::json::object();
@@ -81,9 +124,8 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
     baseInput["provider"] = toString(interaction.provider);
     baseInput["network"] = interaction.network;
     baseInput["service_key"] = interaction.serviceKey;
-    baseInput["ussd_code"] =
-        !interaction.dialCode.empty() ? interaction.dialCode : interaction.serviceKey;
-    baseInput["dial_code"] = interaction.dialCode;
+    baseInput["ussd_code"] = !dialCode.empty() ? dialCode : interaction.serviceKey;
+    baseInput["dial_code"] = dialCode;
     baseInput["sequence"] = interaction.sequence;
     baseInput["client_state"] = interaction.clientState;
     baseInput["input"] = interaction.userInput;  // refined for fresh sessions by the engine call
@@ -93,11 +135,11 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
     // Blocking engine call (state store + blueprint HTTP): runs on the
     // BlockingRunner pool, never on a Drogon IO thread.
     auto outcome = co_await BlockingRunner::instance().run(
-        [&engine, workflowId, sapoSessionId, baseInput,
-         rawInput = interaction.userInput, dialCode = interaction.dialCode,
+        [&engine, workflowId, sapoSessionId, baseInput, dialCode,
+         rawInput = interaction.userInput, forceStart = interaction.isStart,
          correlation]() mutable {
             return engine.executeUssdTurn(workflowId, sapoSessionId, std::move(baseInput), rawInput,
-                                          dialCode, correlation);
+                                          dialCode, correlation, forceStart);
         });
 
     UssdResult result = adapters::renderOutcome(outcome);

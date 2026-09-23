@@ -5,13 +5,17 @@
 // world (via UssdInteraction/UssdResult) and the engine (via
 // SapoEngineService). Per interaction it:
 //
-//   1. resolves the workflow (registry executable -> file -> default),
+//   1. resolves the workflow — from the session's flow binding on
+//      continuation turns, otherwise registry executable -> file -> default
+//      (initiation pins the binding for the turns that follow),
 //   2. ensures the blueprint is registered (content-hashed, cheap),
 //   3. runs exactly one engine turn off the IO threads, where the engine
-//      resumes the "<provider>:<gateway session>" checkpoint or starts it,
+//      resumes the "<provider>:<session>" checkpoint or starts it
+//      (initiation always force-starts, even on redial mid-flow),
 //   4. renders the outcome and writes a best-effort audit row.
 //
-// Gateway release callbacks cancel the engine session instead of running it.
+// Gateway release callbacks cancel the engine session, drop the flow
+// binding, and answer without running anything.
 // Every failure path degrades to a close-session apology message; engine
 // internals never reach the handset.
 //
@@ -23,6 +27,7 @@
 #include <drogon/utils/coroutine.h>
 
 #include "SapoSettings.h"
+#include "UssdFlowBindingStore.h"
 #include "UssdInteraction.h"
 #include "UssdWorkflowResolver.h"
 

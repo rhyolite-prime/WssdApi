@@ -39,7 +39,9 @@ inline std::string toString(UssdProvider provider) {
 /// One inbound USSD webhook, normalized across providers.
 struct UssdInteraction {
     UssdProvider provider = UssdProvider::Nalo;
-    /// Gateway session id (Nalo SESSIONID / Hubtel SessionId).
+    /// Gateway session id. Hubtel passes one (SessionId); Nalo does not, so
+    /// the normalized subscriber MSISDN is the session key (one live USSD
+    /// flow per subscriber, matching the single handset USSD channel).
     std::string networkSessionId;
     /// Subscriber MSISDN (Nalo MSISDN / Hubtel Mobile).
     std::string msisdn;
@@ -55,7 +57,9 @@ struct UssdInteraction {
     int sequence = 0;
     /// Hubtel ClientState echo, "" when the provider sends none.
     std::string clientState;
-    /// True for Hubtel "Initiation" callbacks.
+    /// True for Hubtel "Initiation" callbacks and for Nalo turns whose
+    /// USERDATA is a dial string. Initiation force-starts a fresh engine
+    /// session (redial mid-flow restarts it) and re-pins the flow binding.
     bool isStart = false;
     /// True for Hubtel "Release" callbacks (subscriber gone / timed out).
     bool isRelease = false;

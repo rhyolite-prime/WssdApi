@@ -391,14 +391,18 @@ sapo::runtime::ExecutionOutcome SapoEngineService::executeUssdTurn(const std::st
                                                                    nlohmann::json baseInput,
                                                                    const std::string &rawInput,
                                                                    const std::string &dialCode,
-                                                                   const std::string &correlationId) {
+                                                                   const std::string &correlationId,
+                                                                   bool forceStart) {
     if (!vm_) {
         return failedOutcome(workflowId, sapoSessionId, "NOT_CONFIGURED",
                              "sapo engine is not configured", "");
     }
 
-    const auto snapshot = findSession(sapoSessionId);
-    const bool fresh = !snapshot.has_value() || !snapshot->resumable;
+    // Initiation always starts fresh (a redial overwrites the parked
+    // checkpoint under the same id); continuations resume when possible.
+    const auto snapshot = forceStart ? std::optional<sapo::runtime::SessionSnapshot>{}
+                                     : findSession(sapoSessionId);
+    const bool fresh = forceStart || !snapshot.has_value() || !snapshot->resumable;
 
     nlohmann::json input = std::move(baseInput);
     if (fresh) {

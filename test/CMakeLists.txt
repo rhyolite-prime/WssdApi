@@ -9,7 +9,8 @@ project(WssdApi_test CXX)
 add_executable(${PROJECT_NAME}
         test_main.cc
         test_sapo_adapters.cc
-        ../domain_services/sapo/ProviderAdapters.cc)
+        ../domain_services/sapo/ProviderAdapters.cc
+        ../domain_services/sapo/UssdFlowBindingStore.cc)
 
 target_include_directories(${PROJECT_NAME}
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..

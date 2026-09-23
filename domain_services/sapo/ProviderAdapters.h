@@ -31,12 +31,16 @@ struct ExecutionOutcome;
 
 namespace wssd_api::sapo_host::adapters {
 
-/// Nalo -> neutral. Nalo sends no explicit new/continue flag, so session
-/// state decides (see SapoEngineService::executeUssdTurn).
+/// Nalo -> neutral. Nalo passes no usable session id, so the normalized
+/// MSISDN *is* the session key (one live flow per subscriber), and a
+/// USERDATA dial string marks initiation (see isDialString); everything
+/// else continues the bound flow (see UssdFlowBindingStore).
 UssdInteraction normalizeNalo(const dto::NaloUssdSessionRequestDto &dto, const Json::Value &raw);
 
 /// Hubtel -> neutral. "Initiation" starts, "Response" continues, "Release"
 /// cancels (compared case-insensitively; Hubtel mixes casings in the wild).
+/// Initiation pins the session's flow binding (see UssdFlowBindingStore);
+/// continuations read it back via the passed SessionId.
 UssdInteraction normalizeHubtel(const dto::HubtelUssdSessionRequestDto &dto, const Json::Value &raw);
 
 /// Neutral result -> Nalo wire JSON ({USERID, MSISDN, SESSIONID, USERDATA,
@@ -55,8 +59,18 @@ UssdResult renderOutcome(const ::sapo::runtime::ExecutionOutcome &outcome);
 /// True when the text is a dial string ("*123#", "*711*23#").
 bool isDialCode(const std::string &text);
 
+/// True when the text carries a dial string anywhere (contains both '*'
+/// and '#'). Looser than isDialCode on purpose: Nalo initiation is "the
+/// user entered a short code", and any '*'+'#' input restarts the flow
+/// rather than being misread as a menu reply.
+bool isDialString(const std::string &text);
+
 /// The trimmed dial string, or "" when the text is subscriber input.
 std::string extractDialCode(const std::string &text);
+
+/// Normalizes an MSISDN into a stable session key: trims whitespace,
+/// drops visual separators, strips one leading '+'.
+std::string normalizeMsisdn(const std::string &msisdn);
 
 std::string trimCopy(const std::string &text);
 bool equalsIgnoreCase(const std::string &a, const std::string &b);

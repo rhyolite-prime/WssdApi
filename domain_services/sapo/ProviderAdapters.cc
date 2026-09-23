@@ -99,11 +99,16 @@ std::string firstLine(const std::string &message, std::size_t maxLength) {
 UssdInteraction normalizeNalo(const dto::NaloUssdSessionRequestDto &dto, const Json::Value &raw) {
     UssdInteraction interaction;
     interaction.provider = UssdProvider::Nalo;
-    interaction.networkSessionId = dto.getSession();
-    interaction.msisdn = dto.getMsisdn();
+    // Nalo passes no natural session id (SESSIONID is absent/unreliable),
+    // so the subscriber's MSISDN is the session key: every response the
+    // user sends back resolves to the same flow. The provider's SESSIONID
+    // (when present) survives untouched in `raw` for audit/debugging.
+    interaction.msisdn = normalizeMsisdn(dto.getMsisdn());
+    interaction.networkSessionId = interaction.msisdn;
     interaction.userInput = dto.getUserData();
     interaction.serviceKey = dto.getUserId();
     interaction.dialCode = extractDialCode(dto.getUserData());
+    interaction.isStart = isDialString(dto.getUserData());
     interaction.network = dto.getNetwork();
     interaction.raw = raw;
     return interaction;
@@ -218,6 +223,26 @@ UssdResult renderOutcome(const ::sapo::runtime::ExecutionOutcome &outcome) {
 bool isDialCode(const std::string &text) {
     const std::string trimmed = trimCopy(text);
     return trimmed.size() >= 3 && trimmed.front() == '*' && trimmed.back() == '#';
+}
+
+bool isDialString(const std::string &text) {
+    const std::string trimmed = trimCopy(text);
+    return trimmed.find('*') != std::string::npos && trimmed.find('#') != std::string::npos;
+}
+
+std::string normalizeMsisdn(const std::string &msisdn) {
+    std::string out;
+    out.reserve(msisdn.size());
+    for (const char c : trimCopy(msisdn)) {
+        if (c == ' ' || c == '-' || c == '(' || c == ')') {
+            continue;
+        }
+        out.push_back(c);
+    }
+    if (!out.empty() && out.front() == '+') {
+        out.erase(out.begin());
+    }
+    return out;
 }
 
 std::string extractDialCode(const std::string &text) {

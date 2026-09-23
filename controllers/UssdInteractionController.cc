@@ -33,8 +33,11 @@ Task<HttpResponsePtr> UssdInteractionController::handleNaloUssdInteraction(HttpR
     try {
         wssd_api::dto::NaloUssdSessionRequestDto dto;
         dto.fromJson(*jsonBody);
-        if (dto.getSession().empty() || dto.getMsisdn().empty() || dto.getUserId().empty()) {
-            co_return badRequest("Missing required fields: USERID, MSISDN, SESSIONID");
+        // SESSIONID is deliberately NOT required: Nalo passes no natural
+        // session id, so the normalized MSISDN anchors the session (see
+        // normalizeNalo). Only the service key and subscriber are mandatory.
+        if (dto.getMsisdn().empty() || dto.getUserId().empty()) {
+            co_return badRequest("Missing required fields: USERID, MSISDN");
         }
 
         auto *plugin = drogon::app().getPlugin<SapoEnginePlugin>();

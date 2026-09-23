@@ -8,6 +8,7 @@
 
 #include "domain_services/sapo/ProviderAdapters.h"
 #include "domain_services/sapo/SapoEngineService.h"
+#include "domain_services/sapo/UssdFlowBindingStore.h"
 #include "utils/JsonBridge.h"
 
 using namespace wssd_api::sapo_host;
@@ -36,6 +37,13 @@ DROGON_TEST(ProviderAdaptersDialCode) {
     CHECK(extractDialCode("") == "");
     CHECK(isDialCode("*123#"));
     CHECK(!isDialCode("hello"));
+    CHECK(isDialString("*123#"));
+    CHECK(isDialString("*711*23#"));
+    CHECK(!isDialString("1"));
+    CHECK(!isDialString(""));
+    CHECK(normalizeMsisdn("  +233241234567 ") == "233241234567");
+    CHECK(normalizeMsisdn("233-24-123-4567") == "233241234567");
+    CHECK(normalizeMsisdn("") == "");
     CHECK(equalsIgnoreCase("Initiation", "initiation"));
     CHECK(!equalsIgnoreCase("Response", "Release"));
     CHECK(maskMsisdn("233241234567") == "***567");
@@ -44,21 +52,68 @@ DROGON_TEST(ProviderAdaptersDialCode) {
 DROGON_TEST(ProviderAdaptersNaloNormalize) {
     wssd_api::dto::NaloUssdSessionRequestDto dto;
     dto.setUserId("wssd-nalo");
-    dto.setMsisdn("233241234567");
+    dto.setMsisdn("+233241234567");
     dto.setUserData("*123#");
     dto.setNetwork("MTN");
     dto.setSessionId("sess-1");
     Json::Value raw;
     raw["SESSIONID"] = "sess-1";
 
-    const UssdInteraction interaction = normalizeNalo(dto, raw);
-    CHECK(interaction.provider == UssdProvider::Nalo);
-    CHECK(interaction.networkSessionId == "sess-1");
-    CHECK(interaction.msisdn == "233241234567");
-    CHECK(interaction.serviceKey == "wssd-nalo");
-    CHECK(interaction.dialCode == "*123#");
-    CHECK(!interaction.isStart);
-    CHECK(!interaction.isRelease);
+    // Initiation: dial string in USERDATA, MSISDN-anchored session (the
+    // provider SESSIONID is ignored for identity, kept in raw for audit).
+    const UssdInteraction start = normalizeNalo(dto, raw);
+    CHECK(start.provider == UssdProvider::Nalo);
+    CHECK(start.networkSessionId == "233241234567");
+    CHECK(start.msisdn == "233241234567");
+    CHECK(start.serviceKey == "wssd-nalo");
+    CHECK(start.dialCode == "*123#");
+    CHECK(start.isStart);
+    CHECK(!start.isRelease);
+    CHECK(start.raw["SESSIONID"].asString() == "sess-1");
+
+    // Continuation: same subscriber, plain reply, same session key.
+    dto.setUserData("1");
+    dto.setSessionId("sess-2");
+    const UssdInteraction cont = normalizeNalo(dto, raw);
+    CHECK(cont.networkSessionId == "233241234567");
+    CHECK(cont.dialCode == "");
+    CHECK(!cont.isStart);
+    CHECK(!cont.isRelease);
+}
+
+DROGON_TEST(UssdFlowBindingStoreMemory) {
+    // No Redis URL => in-memory fallback (also the test-binary mode, which
+    // never defines SAPO_ENABLE_REDIS).
+    UssdFlowBindingStore store("", 900, 1);
+    CHECK(!store.usingRedis());
+    CHECK(!store.find("nalo:2331").has_value());
+
+    UssdFlowBinding binding;
+    binding.workflowId = "wssd:123";
+    binding.blueprintJson = "{\"name\":\"wssd:123\"}";
+    binding.serviceKey = "wssd-nalo";
+    binding.dialCode = "*123#";
+    store.save("nalo:2331", binding);
+
+    auto hit = store.find("nalo:2331");
+    CHECK(hit.has_value());
+    CHECK(hit->workflowId == "wssd:123");
+    CHECK(hit->blueprintJson == "{\"name\":\"wssd:123\"}");
+    CHECK(hit->serviceKey == "wssd-nalo");
+    CHECK(hit->dialCode == "*123#");
+    CHECK(hit->updatedMs > 0);
+
+    // Redial overwrites the pinned flow.
+    binding.workflowId = "wssd:456";
+    store.save("nalo:2331", binding);
+    CHECK(store.find("nalo:2331")->workflowId == "wssd:456");
+
+    store.remove("nalo:2331");
+    CHECK(!store.find("nalo:2331").has_value());
+
+    // Empty ids never touch the store.
+    store.save("", binding);
+    CHECK(!store.find("").has_value());
 }
 
 DROGON_TEST(ProviderAdaptersHubtelNormalize) {
