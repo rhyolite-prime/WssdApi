@@ -1,0 +1,68 @@
+{
+  "name": "wssd.demo",
+  "version": "1.0",
+  "description": "Multi-step demo flow: name -> amount -> confirm. Shows prompt chaining, template interpolation and choice routing. Validate with: sapoc validate sapo/workflows/wssd-demo.json",
+  "nodes": [
+    {
+      "id": "ask_name",
+      "type": "action",
+      "label": "Ask recipient name",
+      "prompt_config": {
+        "message": "Welcome to WSSD Demo.\nEnter recipient name:",
+        "interaction_type": "input"
+      },
+      "input_variable": "recipient",
+      "next": "ask_amount"
+    },
+    {
+      "id": "ask_amount",
+      "type": "action",
+      "label": "Ask amount",
+      "prompt_config": {
+        "message": "Enter amount (GHS):",
+        "interaction_type": "input"
+      },
+      "input_variable": "amount",
+      "next": "confirm"
+    },
+    {
+      "id": "confirm",
+      "type": "action",
+      "label": "Confirm transfer",
+      "prompt_config": {
+        "message": "Send GHS ${amount} to ${recipient}?\n1. Confirm\n2. Cancel",
+        "interaction_type": "menu"
+      },
+      "input_variable": "confirmation",
+      "next": "route_confirmation"
+    },
+    {
+      "id": "route_confirmation",
+      "type": "choice",
+      "expression": "$confirmation",
+      "cases": {
+        "1": "done",
+        "2": "cancelled"
+      },
+      "default": "confirm"
+    },
+    {
+      "id": "done",
+      "type": "terminate",
+      "status": "success",
+      "message": "GHS ${amount} sent to ${recipient}. Thank you.",
+      "output": {
+        "message": "GHS ${amount} sent to ${recipient}. Thank you."
+      }
+    },
+    {
+      "id": "cancelled",
+      "type": "terminate",
+      "status": "success",
+      "message": "Request cancelled. Thank you.",
+      "output": {
+        "message": "Request cancelled. Thank you."
+      }
+    }
+  ]
+}

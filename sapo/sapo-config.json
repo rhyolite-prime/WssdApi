@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "engine": {
+    "workers": 4,
+    "log_level": "info",
+    "max_node_visits": 100000,
+    "max_depth": 8,
+    "default_timeout_ms": 180000,
+    "state_redis": { "$env": "SAPO_REDIS_URL" },
+    "state_redis_ttl": 900,
+    "state_redis_pool": 8
+  },
+  "secrets": {},
+  "config": {
+    "ussd": {
+      "default_language": "en",
+      "currency": "GHS"
+    }
+  },
+  "providers": {},
+  "data_sources": [],
+  "workflows": {
+    "directory": "sapo/workflows"
+  },
+  "plugins": []
+}

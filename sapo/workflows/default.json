@@ -1,0 +1,56 @@
+{
+  "name": "wssd.default",
+  "version": "1.0",
+  "description": "Fallback WSSD menu served when no service-specific blueprint resolves. Validate with: sapoc validate sapo/workflows/default.json",
+  "nodes": [
+    {
+      "id": "main_menu",
+      "type": "action",
+      "label": "Main menu",
+      "prompt_config": {
+        "message": "Welcome to WSSD\n1. Check balance\n2. Help\n0. Exit",
+        "interaction_type": "menu"
+      },
+      "input_variable": "choice",
+      "next": "route_choice"
+    },
+    {
+      "id": "route_choice",
+      "type": "choice",
+      "expression": "$choice",
+      "cases": {
+        "1": "balance",
+        "2": "help",
+        "0": "goodbye"
+      },
+      "default": "main_menu"
+    },
+    {
+      "id": "balance",
+      "type": "terminate",
+      "status": "success",
+      "message": "Your balance is GHS 0.00. Thank you.",
+      "output": {
+        "message": "Your balance is GHS 0.00. Thank you."
+      }
+    },
+    {
+      "id": "help",
+      "type": "terminate",
+      "status": "success",
+      "message": "For help, call customer care on 123. Thank you.",
+      "output": {
+        "message": "For help, call customer care on 123. Thank you."
+      }
+    },
+    {
+      "id": "goodbye",
+      "type": "terminate",
+      "status": "success",
+      "message": "Thank you for using WSSD. Goodbye.",
+      "output": {
+        "message": "Thank you for using WSSD. Goodbye."
+      }
+    }
+  ]
+}

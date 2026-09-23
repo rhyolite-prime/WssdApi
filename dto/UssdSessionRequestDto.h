@@ -5,6 +5,10 @@
 #ifndef WSSDAPI_USSDSESSIONREQUESTDTO_H
 #define WSSDAPI_USSDSESSIONREQUESTDTO_H
 
+#include <string>
+
+#include <json/json.h>
+
 namespace wssd_api::dto {
 
     class HubtelUssdSessionRequestDto {

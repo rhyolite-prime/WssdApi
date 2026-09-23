@@ -292,6 +292,46 @@
     "plugins": [
         {
             //name: The class name of the plugin
+            "name": "SapoEnginePlugin",
+            //dependencies: Plugins that the plugin depends on. It can be commented out
+            "dependencies": [],
+            //config: The configuration of the plugin. This json object is the parameter to initialize the plugin.
+            //Environment overrides (see SapoSettings::applyEnvOverrides): SAPO_WORKFLOW_DIR,
+            //SAPO_CONFIG_PATH, SAPO_STATE_DIR, SAPO_REDIS_URL (or SAPO_REDIS_HOST/PORT),
+            //SAPO_LOG_LEVEL, SAPO_DEFAULT_WORKFLOW.
+            "config": {
+                //workflow_directory: *.json blueprints loaded once at startup
+                "workflow_directory": "sapo/workflows",
+                //config_path: optional sapo-config.json (provider config, secrets, engine tunables)
+                "config_path": "sapo/sapo-config.json",
+                //state_directory: file state store (used when redis_url is empty)
+                "state_directory": "sapo/state-store",
+                //redis_url: durable multi-node state; "" (default) selects the file store.
+                //Accepts "host[:port]" or "redis://[[user]:pass@]host[:port][/db]".
+                "redis_url": "",
+                //redis_ttl_seconds: TTL on every Redis session hash
+                "redis_ttl_seconds": 900,
+                //redis_pool_size: socket client pool, keep >= engine workers
+                "redis_pool_size": 8,
+                //redis_atomic_index: fold index writes into the CAS script (single Redis only;
+                //set false on Redis Cluster)
+                "redis_atomic_index": true,
+                //log_level: trace|debug|info|warn|error|off
+                "log_level": "info",
+                //default_workflow: fallback blueprint stem (sapo/workflows/<name>.json)
+                "default_workflow": "default",
+                //blocking_threads: workers for blocking engine calls (0 => hardware default)
+                "blocking_threads": 8
+            }
+        },
+        {
+            "name": "WssdServicePlugin",
+            "dependencies": [],
+            "config": {
+            }
+        },
+        {
+            //name: The class name of the plugin
             "name": "drogon::plugin::PromExporter",
             //dependencies: Plugins that the plugin depends on. It can be commented out
             "dependencies": [],

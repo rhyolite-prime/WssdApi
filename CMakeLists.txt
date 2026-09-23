@@ -61,6 +61,20 @@ add_executable(${PROJECT_NAME} main.cc
         domain_services/ussd_sessions/UssdSessionService.h
         domain_services/ussd_sessions/UssdSessionService.cc
         domain_services/adapters/DrogonHttpTransport.h
+        domain_services/sapo/SapoSettings.h
+        domain_services/sapo/SapoSettings.cc
+        domain_services/sapo/SapoEngineService.h
+        domain_services/sapo/SapoEngineService.cc
+        domain_services/sapo/UssdWorkflowResolver.h
+        domain_services/sapo/UssdWorkflowResolver.cc
+        domain_services/sapo/ProviderAdapters.h
+        domain_services/sapo/ProviderAdapters.cc
+        domain_services/sapo/UssdSessionOrchestrator.h
+        domain_services/sapo/UssdSessionOrchestrator.cc
+        domain_services/sapo/UssdInteraction.h
+        domain_services/sapo/DrogonLogSink.h
+        domain_services/sapo/BlockingRunner.h
+        utils/JsonBridge.h
 )
 
 # ##############################################################################
@@ -72,12 +86,55 @@ add_executable(${PROJECT_NAME} main.cc
 # and comment out the following lines
 find_package(Drogon CONFIG REQUIRED)
 find_package(Threads REQUIRED)
-#target_link_libraries(${PROJECT_NAME} PRIVATE Drogon::Drogon sapo_core)
-target_link_libraries(${PROJECT_NAME} PRIVATE
-        Drogon::Drogon)
 
-# Add sapo-engine project
-#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../sapo-engine sapo-engine_build)
+# ##############################################################################
+# Sapo Engine (USSD workflow runtime).
+#
+# Resolution order:
+#   1. Prebuilt install tree under vendor/sapo (include/ + lib/libsapo_core.a
+#      as produced by `cmake --install` of SapoEngine).
+#   2. Otherwise FetchContent builds SapoEngine from source (needs network at
+#      configure time). Pin WSSD_SAPO_GIT_TAG to a release tag in CI.
+#
+# Either path provides the include directories (engine headers +
+# third_party/nlohmann) through the imported target, plus the public
+# SAPO_ENABLE_REDIS compile definition the Redis state store is guarded on.
+# ##############################################################################
+option(WSSD_USE_VENDORED_SAPO "Prefer the prebuilt engine under vendor/sapo when present" ON)
+set(WSSD_SAPO_GIT_TAG "master" CACHE STRING "SapoEngine git tag/branch when fetching from source")
+set(WSSD_SAPO_TARGET "")
+
+if(WSSD_USE_VENDORED_SAPO AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vendor/sapo/lib/libsapo_core.a")
+    message(STATUS "WssdApi: using vendored SapoEngine from vendor/sapo")
+    list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/vendor/sapo")
+    find_package(SapoEngine CONFIG REQUIRED)
+    set(WSSD_SAPO_TARGET Sapo::sapo_core)
+    target_include_directories(${PROJECT_NAME}
+            PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/sapo/include/sapo
+            ${CMAKE_CURRENT_SOURCE_DIR}/vendor/sapo/include/sapo/third_party)
+else()
+    message(STATUS "WssdApi: fetching SapoEngine (${WSSD_SAPO_GIT_TAG}) via FetchContent")
+    include(FetchContent)
+    set(SAPO_ENABLE_REDIS ON CACHE BOOL "" FORCE)
+    set(SAPO_ENABLE_CPR OFF CACHE BOOL "" FORCE)
+    set(SAPO_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(sapo_engine
+            GIT_REPOSITORY https://github.com/rhyolite-prime/SapoEngine.git
+            GIT_TAG ${WSSD_SAPO_GIT_TAG}
+            GIT_SHALLOW TRUE)
+    FetchContent_MakeAvailable(sapo_engine)
+    if(TARGET Sapo::sapo_core)
+        set(WSSD_SAPO_TARGET Sapo::sapo_core)
+    elseif(TARGET sapo_core)
+        set(WSSD_SAPO_TARGET sapo_core)
+    else()
+        message(FATAL_ERROR "SapoEngine provided no usable library target")
+    endif()
+endif()
+
+target_link_libraries(${PROJECT_NAME} PRIVATE
+        Drogon::Drogon
+        ${WSSD_SAPO_TARGET})
 
 # ##############################################################################
 
@@ -107,9 +164,7 @@ drogon_create_views(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/views
 
 target_include_directories(${PROJECT_NAME}
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/models
-        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/sapo/include/sapo
-        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/sapo/include/sapo/third_party)
+        ${CMAKE_CURRENT_SOURCE_DIR}/models)
 
 
 target_sources(${PROJECT_NAME}
