@@ -29,8 +29,8 @@ provider-neutral JSON.
    into a `UssdInteraction`. The Nalo session key is the normalized MSISDN.
 2. The orchestrator resolves the workflow for the dialed service: the
    session's pinned flow binding on continuation turns, else
-   `wssd_registry` by `ussd_code`, then by `merchant_identifier` (the row's
-   `executable` column **is** the Sapo blueprint JSON), then
+   `wssd_registry` by `ussd_code` (the row's `executable` column **is** the
+   Sapo blueprint JSON), then
    `sapo/workflows/<key>.json`, then the `default` fallback blueprint.
    Initiation turns pin the binding for the turns that follow.
 3. The blueprint is registered under a deterministic id (`wssd:<code>`,

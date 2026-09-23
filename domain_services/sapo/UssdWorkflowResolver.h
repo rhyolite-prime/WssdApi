@@ -5,9 +5,9 @@
 // ServiceCode or the *code# dial string), and the registry may store the
 // code in several spellings. Resolution therefore tries, in order:
 //
-//   1. wssd_registry by ussd_code, then by merchant_identifier, for the
-//      dial code first (most specific) and the gateway service key second;
-//      the row's `executable` column IS the Sapo blueprint JSON.
+//   1. wssd_registry by ussd_code, for the dial code first (most specific)
+//      and the gateway service key second; the row's `executable` column
+//      IS the Sapo blueprint JSON.
 //   2. sapo/workflows/<key>.json files (hot-reloadable through the engine's
 //      content-hash check in SapoEngineService::ensureBlueprint).
 //   3. sapo/workflows/<default>.json as the last-resort fallback menu.
