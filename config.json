@@ -4,7 +4,7 @@
             //address: Ip address,0.0.0.0 by default
             "address": "0.0.0.0",
             //port: Port number
-            "port": 5109,
+            "port": 5107,
             //https: If true, use https for security,false by default
             "https": false
         }
@@ -292,6 +292,46 @@
     "plugins": [
         {
             //name: The class name of the plugin
+            "name": "SapoEnginePlugin",
+            //dependencies: Plugins that the plugin depends on. It can be commented out
+            "dependencies": [],
+            //config: The configuration of the plugin. This json object is the parameter to initialize the plugin.
+            //Environment overrides (see SapoSettings::applyEnvOverrides): SAPO_WORKFLOW_DIR,
+            //SAPO_CONFIG_PATH, SAPO_STATE_DIR, SAPO_REDIS_URL (or SAPO_REDIS_HOST/PORT),
+            //SAPO_LOG_LEVEL, SAPO_DEFAULT_WORKFLOW.
+            "config": {
+                //workflow_directory: *.json blueprints loaded once at startup
+                "workflow_directory": "sapo/workflows",
+                //config_path: optional sapo-config.json (provider config, secrets, engine tunables)
+                "config_path": "sapo/sapo-config.json",
+                //state_directory: file state store (used when redis_url is empty)
+                "state_directory": "sapo/state-store",
+                //redis_url: durable multi-node state; "" (default) selects the file store.
+                //Accepts "host[:port]" or "redis://[[user]:pass@]host[:port][/db]".
+                "redis_url": "redis://127.0.0.1:6379/1",
+                //redis_ttl_seconds: TTL on every Redis session hash
+                "redis_ttl_seconds": 900,
+                //redis_pool_size: socket client pool, keep >= engine workers
+                "redis_pool_size": 8,
+                //redis_atomic_index: fold index writes into the CAS script (single Redis only;
+                //set false on Redis Cluster)
+                "redis_atomic_index": true,
+                //log_level: trace|debug|info|warn|error|off
+                "log_level": "info",
+                //default_workflow: fallback blueprint stem (sapo/workflows/<name>.json)
+                "default_workflow": "default",
+                //blocking_threads: workers for blocking engine calls (0 => hardware default)
+                "blocking_threads": 8
+            }
+        },
+        {
+            "name": "WssdServicePlugin",
+            "dependencies": [],
+            "config": {
+            }
+        },
+        {
+            //name: The class name of the plugin
             "name": "drogon::plugin::PromExporter",
             //dependencies: Plugins that the plugin depends on. It can be commented out
             "dependencies": [],
@@ -321,6 +361,53 @@
     //custom_config: custom configuration for users. This object can be get by the app().getCustomConfig() method.
     "custom_config": {
 
+        "TurboLedger": {
+            "Ra": {
+                "ServiceName" : "Identity",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7500/api/v1/"
+            },
+            "Thoth": {
+                "ServiceName" : "accounting",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7501/api/v1/"
+            },
+            "Khepri": {
+                "ServiceName" : "heart-beat",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7502/api/v1/"
+            },
+            "Horus": {
+                "ServiceName" : "office",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7503/api/v1/"
+            },
+            "Maat": {
+                "ServiceName" : "customer",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7504/api/v1/"
+            },
+            "Shed": {
+                "ServiceName" : "deposit-account-management",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7505/api/v1/"
+            },
+            "Tajet": {
+                "ServiceName" : "teller",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7506/api/v1/"
+            },
+            "Atum": {
+                "ServiceName" : "teller",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7506/api/v1/"
+            },
+            "Ptah": {
+                "ServiceName" : "teller",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7507/api/v1/"
+            }
+        },
         "WssdSubscriptionPackages": [
             {
                 "Plan": "3 Months",

@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sapo.engine/schemas/workflow.schema.json",
+  "title": "Sapo Workflow Blueprint (DSL Grammar v1)",
+  "description": "Editor tooling and external producers only. The authority on what the engine accepts is sapo::parser::WorkflowParser plus sapo::parser::BlueprintValidator (src/parser/), which additionally checks node ids, jump targets, reachability, cycles, capability registration and unused fields. Anything this file allows but the parser rejects is a bug in this file.",
+  "type": "object",
+  "required": ["nodes"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Workflow id used by subflow/`workflow` references and the registry. Default: sapo.workflow",
+      "minLength": 1
+    },
+    "version": { "type": "string", "default": "1.0" },
+    "description": { "type": "string" },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "description": "Execution is jump-based: the entry point is the first node, and a node without `next` ends the session unless it is inside a body (loop/then/catch/branch), where the next sibling follows implicitly.",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Starts the workflow from the event bus instead of an explicit call.",
+      "properties": {
+        "event": { "type": "string", "description": "Exact name or prefix pattern, e.g. payments.*" },
+        "input": { "type": "object", "description": "Merged into the session context at start" }
+      }
+    },
+    "defaults": { "type": "object", "description": "Seed values merged into every session context" }
+  },
+  "$defs": {
+    "template": {
+      "type": "string",
+      "description": "Interpolation template: `${<SEL expression>}` blocks mixed with literal text; a lone `$path` yields the value with its JSON type. Value fields (assign, output, input, collection, count, message, selector) use this form."
+    },
+    "predicate": {
+      "type": "string",
+      "description": "SEL program evaluated to a boolean (condition, when, while, until, filter, predicate, input_validation, trigger_condition, execute_condition). Do NOT wrap it in `${}`: that yields truthiness of the interpolated text, not a comparison."
+    },
+    "retry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_attempts": { "type": "integer", "minimum": 1, "default": 3 },
+        "backoff_ms": { "type": ["integer", "string"], "minimum": 0, "default": 250 },
+        "multiplier": { "type": "number", "minimum": 1, "default": 2 },
+        "jitter": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.2 },
+        "max_backoff_ms": { "type": "integer", "minimum": 0, "default": 15000 },
+        "retry_on": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Error codes or HTTP statuses that are retryable. Empty means transport errors and 5xx/429 only; a non-empty list replaces the default."
+        }
+      }
+    },
+    "prompt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message"],
+      "properties": {
+        "message": { "$ref": "#/$defs/template" },
+        "interaction_type": { "enum": ["display", "input", "menu", "pin"], "default": "input" },
+        "input_validation": { "$ref": "#/$defs/predicate" },
+        "output": { "type": "string", "description": "Context key the reply is written to" },
+        "options": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Dynamic menu options. `source` resolves to an array; `labelFormat` and `valueFormat` support `$Property` placeholders (for example `$BankChannel - $BankCode` and `$BankCode`) and determine the displayed label and stored value. Supports raw scalar arrays and pagination via `page_size`, `page_variable`, `next_value`, `previous_value`, `back_value`, and `back_next` (the node id to jump to when the back value is selected)."
+        },
+        "features": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Alias for dynamic menu options; may contain the options directly or under an `options` object."
+        },
+        "timeout": { "type": ["integer", "string"], "description": "Milliseconds, or a duration string such as 90s / 2m" }
+      }
+    },
+    "dataSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "provider"],
+      "properties": {
+        "name": { "type": "string" },
+        "provider": { "enum": ["context", "mock", "http", "postgresql", "redis"] },
+        "scope": { "enum": ["internal", "session", "workflow"], "default": "internal" },
+        "config": {
+          "type": "object",
+          "description": "provider=context needs `source` (e.g. \"$rows\"); provider=mock needs `rows` or `file`"
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "Unique across the whole blueprint, hoisted children included. Synthesised when omitted." },
+        "type": {
+          "enum": ["noop", "transform", "query", "command", "event", "wait", "schedule", "subflow", "script", "condition", "if", "choice", "switch", "parallel", "action", "loop", "break", "continue", "loop_control", "try", "terminate"]
+        },
+        "label": { "type": "string" },
+        "next": { "type": "string", "description": "Node id. A body node whose `next` leaves its body escapes that body." },
+        "on_error": { "type": "string", "description": "Node id run when this node fails; $error carries {code, message, node, data}" },
+        "retry": { "$ref": "#/$defs/retry" },
+        "meta": { "type": "object" },
+
+        "assign": { "type": "object", "additionalProperties": { "$ref": "#/$defs/template" }, "description": "noop: write context keys" },
+
+        "capability": { "type": "string", "description": "action: dot-notation capability, must resolve to a registered provider; empty when the node only prompts or awaits an event" },
+        "input": { "type": "object", "description": "action/command: inputs sent to the capability, template-valued" },
+        "output": {
+          "description": "command/action: object of context key -> result path ($.body.name), or a single context-key string",
+          "oneOf": [{ "type": "string" }, { "type": "object" }, { "type": "array", "items": { "type": "string" } }]
+        },
+        "await_input": { "type": "boolean", "default": true },
+        "input_variable": { "type": "string" },
+        "prompt_config": { "$ref": "#/$defs/prompt" },
+        "on_event": {
+          "oneOf": [
+            { "type": "string" },
+            {
+              "type": "object",
+              "required": ["event_name"],
+              "additionalProperties": false,
+              "properties": {
+                "event_name": { "type": "string" },
+                "trigger_condition": { "$ref": "#/$defs/predicate" },
+                "handler": { "type": "string", "description": "Node id to resume at; the node itself is re-entered by default" }
+              }
+            }
+          ]
+        },
+        "next_tasks": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "required": ["task_id"],
+                "additionalProperties": false,
+                "properties": {
+                  "task_id": { "type": "string" },
+                  "execute_condition": { "$ref": "#/$defs/predicate" }
+                }
+              }
+            ]
+          },
+          "description": "action: first matching entry wins; used to build menu-style routing"
+        },
+        "data_sources": { "type": "array", "items": { "$ref": "#/$defs/dataSource" }, "description": "action: declarations consumed by `query` nodes" },
+
+        "command": { "type": "string", "description": "command: e.g. http.get, http.post, http.put, http.patch, http.delete, http.request" },
+        "http_request": {
+          "type": "object",
+          "required": ["url"],
+          "additionalProperties": false,
+          "properties": {
+            "url": { "$ref": "#/$defs/template" },
+            "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "get", "post", "put", "patch", "delete"] },
+            "headers": { "type": "object", "additionalProperties": { "$ref": "#/$defs/template" } },
+            "query": { "type": "object", "additionalProperties": { "$ref": "#/$defs/template" } },
+            "body": {},
+            "auth": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": { "enum": ["bearer", "basic", "api_key"] },
+                "token": { "$ref": "#/$defs/template" },
+                "username": { "$ref": "#/$defs/template" },
+                "password": { "$ref": "#/$defs/template" },
+                "key": { "type": "string" },
+                "in": { "enum": ["header", "query"] }
+              }
+            },
+            "timeout": { "type": ["integer", "string"] }
+          }
+        },
+
+        "condition": { "$ref": "#/$defs/predicate" },
+        "then": { "description": "body array or node id", "oneOf": [{ "type": "string" }, { "type": "array", "items": { "$ref": "#/$defs/node" } }] },
+        "else": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "$ref": "#/$defs/node" } }] },
+
+        "expression": { "description": "choice: selector value (template); condition: predicate" },
+        "cases": { "type": "object", "description": "choice: value -> node id", "additionalProperties": { "type": "string" } },
+        "default": { "type": "string" },
+
+        "collection": { "$ref": "#/$defs/template" },
+        "count": { "$ref": "#/$defs/template" },
+        "while": { "$ref": "#/$defs/predicate" },
+        "iterator": { "type": "string", "description": "loop: name bound to the current item (default: item)" },
+        "index": { "type": "string", "description": "loop: name bound to the current position (default: index)" },
+        "max_iterations": { "type": ["integer", "string"] },
+        "on_item_error": { "enum": ["fail", "continue"], "default": "fail" },
+        "body": { "type": "array", "items": { "$ref": "#/$defs/node" } },
+
+        "duration": { "type": "string", "description": "wait: 30s, 5m, 1200ms, 45 (bare = seconds), or an ISO-8601 deadline" },
+        "until": { "description": "wait: predicate re-checked each poll, or an absolute timestamp", "type": "string" },
+        "poll_interval": { "type": ["integer", "string"] },
+        "durable": { "type": "boolean", "default": true },
+
+        "cron": { "type": "string", "description": "schedule: 5-field cron" },
+        "timezone": { "type": "string", "default": "UTC" },
+        "job_id": { "type": "string" },
+        "workflow": { "type": "string", "description": "schedule: workflow to start (self-recursion is rejected)" },
+        "node_id": { "type": "string" },
+
+        "source": { "type": "string", "description": "query: data-source name; an undeclared id reads the context collection of that name" },
+        "filter": { "description": "query: object/array row matcher, or a SEL predicate string", "oneOf": [{ "type": "string" }, { "type": "object" }, { "type": "array" }] },
+        "limit": { "type": "integer", "minimum": 0 },
+        "offset": { "type": "integer", "minimum": 0 },
+        "query": { "type": "string", "description": "query: provider statement (sql etc.)" },
+        "parameters": { "type": "object" },
+
+        "operation": { "enum": ["assign", "set", "copy", "filter", "map", "project", "merge", "group", "sort", "flatten", "reduce"] },
+        "mapping": { "type": "object", "description": "transform: per-row projection or grouping key" },
+        "where": { "$ref": "#/$defs/predicate" },
+        "item_variable": { "type": "string", "default": "item" },
+        "as_array": { "type": "boolean", "default": false },
+
+        "code": { "type": "string", "description": "script: one SEL program; see docs/LIMITATIONS.md for the Lua gap" },
+        "bindings": { "type": "object", "additionalProperties": { "type": "string" }, "description": "script: locals evaluated as programs before the body" },
+
+        "child_tasks": { "type": "array", "description": "parallel: branches, each an id array or an inline node array" },
+        "merge_policy": { "enum": ["wait_all", "fail_fast", "quorum"], "default": "wait_all" },
+        "fail_fast": { "type": "boolean" },
+
+        "target": { "type": "string", "description": "subflow: workflow id" },
+        "return": { "type": "object", "description": "subflow: map child output keys onto parent keys" },
+        "max_depth": { "type": "integer", "minimum": 1, "default": 8 },
+
+        "catch": {
+          "description": "try: handler body, or an object with as/when/body",
+          "oneOf": [
+            { "type": "array", "items": { "$ref": "#/$defs/node" } },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "as": { "type": "string", "description": "context variable the error object is bound to (default: error)" },
+                "when": { "type": "object", "description": "error code -> handler node id", "additionalProperties": { "type": "string" } },
+                "target": { "type": "string" },
+                "jump_to": { "type": "string" },
+                "body": { "type": "array", "items": { "$ref": "#/$defs/node" } }
+              }
+            }
+          ]
+        },
+        "finally": { "type": "array", "items": { "$ref": "#/$defs/node" } },
+
+        "status": { "enum": ["success", "failure"], "description": "terminate: maps to SessionStatus completed / failed" },
+        "message": { "$ref": "#/$defs/template" }
+      }
+    }
+  }
+}

@@ -17,8 +17,6 @@ namespace wssd_api::domain_services {
 
         drogon::Task<dto::BaseApiResponse> getAll(int pageNo, int pageSize, const std::string &query);
 
-        drogon::Task<dto::BaseApiResponse> getAll(const std::string &businessId, int pageNo, int pageSize, const std::string &query);
-
         drogon::Task<dto::BaseApiResponse> create(const dto::PluginDto &dto);
 
         drogon::Task<dto::BaseApiResponse> update(const dto::PluginDto &dto, const std::string &id); // can only update user defined plugins; built-in plugins or system plugins cant be updated

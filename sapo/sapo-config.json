@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "engine": {
+    "_comment": "WssdApi owns state-store selection (plugin redis_url / SAPO_REDIS_URL env) and log level (plugin log_level). Do NOT add engine.state_redis, engine.state_dir or engine.log_level here: the engine would take over store selection from state_redis/state_dir (and fail startup when unresolvable), and override the plugin log level.",
+    "workers": 4,
+    "max_node_visits": 100000,
+    "max_depth": 8,
+    "default_timeout_ms": 180000
+  },
+  "secrets": {},
+  "config": {
+    "ussd": {
+      "default_language": "en",
+      "currency": "GHS"
+    }
+  },
+  "providers": {},
+  "data_sources": [],
+  "workflows": {
+    "directory": "sapo/workflows"
+  },
+  "plugins": []
+}

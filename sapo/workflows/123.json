@@ -1,0 +1,30 @@
+{
+  "name": "wssd:123",
+  "start": "call_api",
+  "nodes": [
+    {
+      "id": "call_api",
+      "type": "command",
+      "command": "http.get",
+      "http_request": {
+        "url": "http://httpbin.org/get"
+      },
+      "next": "show_result",
+      "on_error": "show_error"
+    },
+    {
+      "id": "show_result",
+      "type": "terminate",
+      "output": {
+        "message": "API call succeeded! Status: {{$http.status_code}}"
+      }
+    },
+    {
+      "id": "show_error",
+      "type": "terminate",
+      "output": {
+        "message": "API call failed! Error: {{$error}}"
+      }
+    }
+  ]
+}

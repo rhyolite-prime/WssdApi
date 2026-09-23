@@ -8,8 +8,8 @@
 
 #include <drogon/plugins/Plugin.h>
 
-#include "domain_services/ussd_sessions/UssdSessionService.h"
-#include "domain_services/wssd_registry/WssdRegistryServce.h"
+#include "domain_services/redis/RedisCacheManager.h"
+#include "domain_services/wssd_registry/WssdRegistryService.h"
 
 
 class WssdServicePlugin : public drogon::Plugin<WssdServicePlugin>
@@ -25,7 +25,6 @@ class WssdServicePlugin : public drogon::Plugin<WssdServicePlugin>
     /// It must be implemented by the user.
     void shutdown() override;
 
-    wssd_api::domain_services::UssdSessionService &getUssdSessionService() { return ussdSessionService_; }
     wssd_api::domain_services::WssdRegistryService &getWssdRegistryService() { return wssdRegistryService_; }
     wssd_api::domain_services::RedisCacheManager &getRedisCacheManager() { return redisCacheManager_; }
 
@@ -33,6 +32,5 @@ class WssdServicePlugin : public drogon::Plugin<WssdServicePlugin>
 private:
     wssd_api::domain_services::RedisCacheManager redisCacheManager_;
     wssd_api::domain_services::WssdRegistryService wssdRegistryService_;
-    wssd_api::domain_services::UssdSessionService ussdSessionService_;
 };
 

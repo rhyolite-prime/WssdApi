@@ -17,12 +17,12 @@ const std::string UssdPlugins::Cols::_id = "\"id\"";
 const std::string UssdPlugins::Cols::_name = "\"name\"";
 const std::string UssdPlugins::Cols::_description = "\"description\"";
 const std::string UssdPlugins::Cols::_category = "\"category\"";
+const std::string UssdPlugins::Cols::_author = "\"author\"";
 const std::string UssdPlugins::Cols::_default_config = "\"default_config\"";
 const std::string UssdPlugins::Cols::_spec = "\"spec\"";
 const std::string UssdPlugins::Cols::_is_active = "\"is_active\"";
 const std::string UssdPlugins::Cols::_is_built_in = "\"is_built_in\"";
 const std::string UssdPlugins::Cols::_is_preinstalled = "\"is_preinstalled\"";
-const std::string UssdPlugins::Cols::_business_id = "\"business_id\"";
 const std::string UssdPlugins::Cols::_version = "\"version\"";
 const std::string UssdPlugins::Cols::_created_at = "\"created_at\"";
 const std::string UssdPlugins::Cols::_updated_at = "\"updated_at\"";
@@ -35,12 +35,12 @@ const std::vector<typename UssdPlugins::MetaData> UssdPlugins::metaData_={
 {"name","std::string","character varying",255,0,0,1},
 {"description","std::string","text",0,0,0,0},
 {"category","std::string","character varying",50,0,0,1},
+{"author","std::string","character varying",150,0,0,1},
 {"default_config","std::string","jsonb",0,0,0,0},
 {"spec","std::string","jsonb",0,0,0,0},
 {"is_active","bool","boolean",1,0,0,0},
 {"is_built_in","bool","boolean",1,0,0,0},
 {"is_preinstalled","bool","boolean",1,0,0,0},
-{"business_id","std::string","uuid",0,0,0,0},
 {"version","std::string","character varying",20,0,0,0},
 {"created_at","::trantor::Date","timestamp with time zone",0,0,0,0},
 {"updated_at","::trantor::Date","timestamp with time zone",0,0,0,0}
@@ -70,6 +70,10 @@ UssdPlugins::UssdPlugins(const Row &r, const ssize_t indexOffset) noexcept
         {
             category_=std::make_shared<std::string>(r["category"].as<std::string>());
         }
+        if(!r["author"].isNull())
+        {
+            author_=std::make_shared<std::string>(r["author"].as<std::string>());
+        }
         if(!r["default_config"].isNull())
         {
             defaultConfig_=std::make_shared<std::string>(r["default_config"].as<std::string>());
@@ -89,10 +93,6 @@ UssdPlugins::UssdPlugins(const Row &r, const ssize_t indexOffset) noexcept
         if(!r["is_preinstalled"].isNull())
         {
             isPreinstalled_=std::make_shared<bool>(r["is_preinstalled"].as<bool>());
-        }
-        if(!r["business_id"].isNull())
-        {
-            businessId_=std::make_shared<std::string>(r["business_id"].as<std::string>());
         }
         if(!r["version"].isNull())
         {
@@ -175,32 +175,32 @@ UssdPlugins::UssdPlugins(const Row &r, const ssize_t indexOffset) noexcept
         index = offset + 4;
         if(!r[index].isNull())
         {
-            defaultConfig_=std::make_shared<std::string>(r[index].as<std::string>());
+            author_=std::make_shared<std::string>(r[index].as<std::string>());
         }
         index = offset + 5;
         if(!r[index].isNull())
         {
-            spec_=std::make_shared<std::string>(r[index].as<std::string>());
+            defaultConfig_=std::make_shared<std::string>(r[index].as<std::string>());
         }
         index = offset + 6;
         if(!r[index].isNull())
         {
-            isActive_=std::make_shared<bool>(r[index].as<bool>());
+            spec_=std::make_shared<std::string>(r[index].as<std::string>());
         }
         index = offset + 7;
         if(!r[index].isNull())
         {
-            isBuiltIn_=std::make_shared<bool>(r[index].as<bool>());
+            isActive_=std::make_shared<bool>(r[index].as<bool>());
         }
         index = offset + 8;
         if(!r[index].isNull())
         {
-            isPreinstalled_=std::make_shared<bool>(r[index].as<bool>());
+            isBuiltIn_=std::make_shared<bool>(r[index].as<bool>());
         }
         index = offset + 9;
         if(!r[index].isNull())
         {
-            businessId_=std::make_shared<std::string>(r[index].as<std::string>());
+            isPreinstalled_=std::make_shared<bool>(r[index].as<bool>());
         }
         index = offset + 10;
         if(!r[index].isNull())
@@ -301,7 +301,7 @@ UssdPlugins::UssdPlugins(const Json::Value &pJson, const std::vector<std::string
         dirtyFlag_[4] = true;
         if(!pJson[pMasqueradingVector[4]].isNull())
         {
-            defaultConfig_=std::make_shared<std::string>(pJson[pMasqueradingVector[4]].asString());
+            author_=std::make_shared<std::string>(pJson[pMasqueradingVector[4]].asString());
         }
     }
     if(!pMasqueradingVector[5].empty() && pJson.isMember(pMasqueradingVector[5]))
@@ -309,7 +309,7 @@ UssdPlugins::UssdPlugins(const Json::Value &pJson, const std::vector<std::string
         dirtyFlag_[5] = true;
         if(!pJson[pMasqueradingVector[5]].isNull())
         {
-            spec_=std::make_shared<std::string>(pJson[pMasqueradingVector[5]].asString());
+            defaultConfig_=std::make_shared<std::string>(pJson[pMasqueradingVector[5]].asString());
         }
     }
     if(!pMasqueradingVector[6].empty() && pJson.isMember(pMasqueradingVector[6]))
@@ -317,7 +317,7 @@ UssdPlugins::UssdPlugins(const Json::Value &pJson, const std::vector<std::string
         dirtyFlag_[6] = true;
         if(!pJson[pMasqueradingVector[6]].isNull())
         {
-            isActive_=std::make_shared<bool>(pJson[pMasqueradingVector[6]].asBool());
+            spec_=std::make_shared<std::string>(pJson[pMasqueradingVector[6]].asString());
         }
     }
     if(!pMasqueradingVector[7].empty() && pJson.isMember(pMasqueradingVector[7]))
@@ -325,7 +325,7 @@ UssdPlugins::UssdPlugins(const Json::Value &pJson, const std::vector<std::string
         dirtyFlag_[7] = true;
         if(!pJson[pMasqueradingVector[7]].isNull())
         {
-            isBuiltIn_=std::make_shared<bool>(pJson[pMasqueradingVector[7]].asBool());
+            isActive_=std::make_shared<bool>(pJson[pMasqueradingVector[7]].asBool());
         }
     }
     if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
@@ -333,7 +333,7 @@ UssdPlugins::UssdPlugins(const Json::Value &pJson, const std::vector<std::string
         dirtyFlag_[8] = true;
         if(!pJson[pMasqueradingVector[8]].isNull())
         {
-            isPreinstalled_=std::make_shared<bool>(pJson[pMasqueradingVector[8]].asBool());
+            isBuiltIn_=std::make_shared<bool>(pJson[pMasqueradingVector[8]].asBool());
         }
     }
     if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
@@ -341,7 +341,7 @@ UssdPlugins::UssdPlugins(const Json::Value &pJson, const std::vector<std::string
         dirtyFlag_[9] = true;
         if(!pJson[pMasqueradingVector[9]].isNull())
         {
-            businessId_=std::make_shared<std::string>(pJson[pMasqueradingVector[9]].asString());
+            isPreinstalled_=std::make_shared<bool>(pJson[pMasqueradingVector[9]].asBool());
         }
     }
     if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
@@ -440,9 +440,17 @@ UssdPlugins::UssdPlugins(const Json::Value &pJson) noexcept(false)
             category_=std::make_shared<std::string>(pJson["category"].asString());
         }
     }
-    if(pJson.isMember("default_config"))
+    if(pJson.isMember("author"))
     {
         dirtyFlag_[4]=true;
+        if(!pJson["author"].isNull())
+        {
+            author_=std::make_shared<std::string>(pJson["author"].asString());
+        }
+    }
+    if(pJson.isMember("default_config"))
+    {
+        dirtyFlag_[5]=true;
         if(!pJson["default_config"].isNull())
         {
             defaultConfig_=std::make_shared<std::string>(pJson["default_config"].asString());
@@ -450,7 +458,7 @@ UssdPlugins::UssdPlugins(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("spec"))
     {
-        dirtyFlag_[5]=true;
+        dirtyFlag_[6]=true;
         if(!pJson["spec"].isNull())
         {
             spec_=std::make_shared<std::string>(pJson["spec"].asString());
@@ -458,7 +466,7 @@ UssdPlugins::UssdPlugins(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("is_active"))
     {
-        dirtyFlag_[6]=true;
+        dirtyFlag_[7]=true;
         if(!pJson["is_active"].isNull())
         {
             isActive_=std::make_shared<bool>(pJson["is_active"].asBool());
@@ -466,7 +474,7 @@ UssdPlugins::UssdPlugins(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("is_built_in"))
     {
-        dirtyFlag_[7]=true;
+        dirtyFlag_[8]=true;
         if(!pJson["is_built_in"].isNull())
         {
             isBuiltIn_=std::make_shared<bool>(pJson["is_built_in"].asBool());
@@ -474,18 +482,10 @@ UssdPlugins::UssdPlugins(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("is_preinstalled"))
     {
-        dirtyFlag_[8]=true;
+        dirtyFlag_[9]=true;
         if(!pJson["is_preinstalled"].isNull())
         {
             isPreinstalled_=std::make_shared<bool>(pJson["is_preinstalled"].asBool());
-        }
-    }
-    if(pJson.isMember("business_id"))
-    {
-        dirtyFlag_[9]=true;
-        if(!pJson["business_id"].isNull())
-        {
-            businessId_=std::make_shared<std::string>(pJson["business_id"].asString());
         }
     }
     if(pJson.isMember("version"))
@@ -594,7 +594,7 @@ void UssdPlugins::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[4] = true;
         if(!pJson[pMasqueradingVector[4]].isNull())
         {
-            defaultConfig_=std::make_shared<std::string>(pJson[pMasqueradingVector[4]].asString());
+            author_=std::make_shared<std::string>(pJson[pMasqueradingVector[4]].asString());
         }
     }
     if(!pMasqueradingVector[5].empty() && pJson.isMember(pMasqueradingVector[5]))
@@ -602,7 +602,7 @@ void UssdPlugins::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[5] = true;
         if(!pJson[pMasqueradingVector[5]].isNull())
         {
-            spec_=std::make_shared<std::string>(pJson[pMasqueradingVector[5]].asString());
+            defaultConfig_=std::make_shared<std::string>(pJson[pMasqueradingVector[5]].asString());
         }
     }
     if(!pMasqueradingVector[6].empty() && pJson.isMember(pMasqueradingVector[6]))
@@ -610,7 +610,7 @@ void UssdPlugins::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[6] = true;
         if(!pJson[pMasqueradingVector[6]].isNull())
         {
-            isActive_=std::make_shared<bool>(pJson[pMasqueradingVector[6]].asBool());
+            spec_=std::make_shared<std::string>(pJson[pMasqueradingVector[6]].asString());
         }
     }
     if(!pMasqueradingVector[7].empty() && pJson.isMember(pMasqueradingVector[7]))
@@ -618,7 +618,7 @@ void UssdPlugins::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[7] = true;
         if(!pJson[pMasqueradingVector[7]].isNull())
         {
-            isBuiltIn_=std::make_shared<bool>(pJson[pMasqueradingVector[7]].asBool());
+            isActive_=std::make_shared<bool>(pJson[pMasqueradingVector[7]].asBool());
         }
     }
     if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
@@ -626,7 +626,7 @@ void UssdPlugins::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[8] = true;
         if(!pJson[pMasqueradingVector[8]].isNull())
         {
-            isPreinstalled_=std::make_shared<bool>(pJson[pMasqueradingVector[8]].asBool());
+            isBuiltIn_=std::make_shared<bool>(pJson[pMasqueradingVector[8]].asBool());
         }
     }
     if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
@@ -634,7 +634,7 @@ void UssdPlugins::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[9] = true;
         if(!pJson[pMasqueradingVector[9]].isNull())
         {
-            businessId_=std::make_shared<std::string>(pJson[pMasqueradingVector[9]].asString());
+            isPreinstalled_=std::make_shared<bool>(pJson[pMasqueradingVector[9]].asBool());
         }
     }
     if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
@@ -732,9 +732,17 @@ void UssdPlugins::updateByJson(const Json::Value &pJson) noexcept(false)
             category_=std::make_shared<std::string>(pJson["category"].asString());
         }
     }
-    if(pJson.isMember("default_config"))
+    if(pJson.isMember("author"))
     {
         dirtyFlag_[4] = true;
+        if(!pJson["author"].isNull())
+        {
+            author_=std::make_shared<std::string>(pJson["author"].asString());
+        }
+    }
+    if(pJson.isMember("default_config"))
+    {
+        dirtyFlag_[5] = true;
         if(!pJson["default_config"].isNull())
         {
             defaultConfig_=std::make_shared<std::string>(pJson["default_config"].asString());
@@ -742,7 +750,7 @@ void UssdPlugins::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("spec"))
     {
-        dirtyFlag_[5] = true;
+        dirtyFlag_[6] = true;
         if(!pJson["spec"].isNull())
         {
             spec_=std::make_shared<std::string>(pJson["spec"].asString());
@@ -750,7 +758,7 @@ void UssdPlugins::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("is_active"))
     {
-        dirtyFlag_[6] = true;
+        dirtyFlag_[7] = true;
         if(!pJson["is_active"].isNull())
         {
             isActive_=std::make_shared<bool>(pJson["is_active"].asBool());
@@ -758,7 +766,7 @@ void UssdPlugins::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("is_built_in"))
     {
-        dirtyFlag_[7] = true;
+        dirtyFlag_[8] = true;
         if(!pJson["is_built_in"].isNull())
         {
             isBuiltIn_=std::make_shared<bool>(pJson["is_built_in"].asBool());
@@ -766,18 +774,10 @@ void UssdPlugins::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("is_preinstalled"))
     {
-        dirtyFlag_[8] = true;
+        dirtyFlag_[9] = true;
         if(!pJson["is_preinstalled"].isNull())
         {
             isPreinstalled_=std::make_shared<bool>(pJson["is_preinstalled"].asBool());
-        }
-    }
-    if(pJson.isMember("business_id"))
-    {
-        dirtyFlag_[9] = true;
-        if(!pJson["business_id"].isNull())
-        {
-            businessId_=std::make_shared<std::string>(pJson["business_id"].asString());
         }
     }
     if(pJson.isMember("version"))
@@ -940,6 +940,28 @@ void UssdPlugins::setCategory(std::string &&pCategory) noexcept
     dirtyFlag_[3] = true;
 }
 
+const std::string &UssdPlugins::getValueOfAuthor() const noexcept
+{
+    static const std::string defaultValue = std::string();
+    if(author_)
+        return *author_;
+    return defaultValue;
+}
+const std::shared_ptr<std::string> &UssdPlugins::getAuthor() const noexcept
+{
+    return author_;
+}
+void UssdPlugins::setAuthor(const std::string &pAuthor) noexcept
+{
+    author_ = std::make_shared<std::string>(pAuthor);
+    dirtyFlag_[4] = true;
+}
+void UssdPlugins::setAuthor(std::string &&pAuthor) noexcept
+{
+    author_ = std::make_shared<std::string>(std::move(pAuthor));
+    dirtyFlag_[4] = true;
+}
+
 const std::string &UssdPlugins::getValueOfDefaultConfig() const noexcept
 {
     static const std::string defaultValue = std::string();
@@ -954,17 +976,17 @@ const std::shared_ptr<std::string> &UssdPlugins::getDefaultConfig() const noexce
 void UssdPlugins::setDefaultConfig(const std::string &pDefaultConfig) noexcept
 {
     defaultConfig_ = std::make_shared<std::string>(pDefaultConfig);
-    dirtyFlag_[4] = true;
+    dirtyFlag_[5] = true;
 }
 void UssdPlugins::setDefaultConfig(std::string &&pDefaultConfig) noexcept
 {
     defaultConfig_ = std::make_shared<std::string>(std::move(pDefaultConfig));
-    dirtyFlag_[4] = true;
+    dirtyFlag_[5] = true;
 }
 void UssdPlugins::setDefaultConfigToNull() noexcept
 {
     defaultConfig_.reset();
-    dirtyFlag_[4] = true;
+    dirtyFlag_[5] = true;
 }
 
 const std::string &UssdPlugins::getValueOfSpec() const noexcept
@@ -981,17 +1003,17 @@ const std::shared_ptr<std::string> &UssdPlugins::getSpec() const noexcept
 void UssdPlugins::setSpec(const std::string &pSpec) noexcept
 {
     spec_ = std::make_shared<std::string>(pSpec);
-    dirtyFlag_[5] = true;
+    dirtyFlag_[6] = true;
 }
 void UssdPlugins::setSpec(std::string &&pSpec) noexcept
 {
     spec_ = std::make_shared<std::string>(std::move(pSpec));
-    dirtyFlag_[5] = true;
+    dirtyFlag_[6] = true;
 }
 void UssdPlugins::setSpecToNull() noexcept
 {
     spec_.reset();
-    dirtyFlag_[5] = true;
+    dirtyFlag_[6] = true;
 }
 
 const bool &UssdPlugins::getValueOfIsActive() const noexcept
@@ -1008,12 +1030,12 @@ const std::shared_ptr<bool> &UssdPlugins::getIsActive() const noexcept
 void UssdPlugins::setIsActive(const bool &pIsActive) noexcept
 {
     isActive_ = std::make_shared<bool>(pIsActive);
-    dirtyFlag_[6] = true;
+    dirtyFlag_[7] = true;
 }
 void UssdPlugins::setIsActiveToNull() noexcept
 {
     isActive_.reset();
-    dirtyFlag_[6] = true;
+    dirtyFlag_[7] = true;
 }
 
 const bool &UssdPlugins::getValueOfIsBuiltIn() const noexcept
@@ -1030,12 +1052,12 @@ const std::shared_ptr<bool> &UssdPlugins::getIsBuiltIn() const noexcept
 void UssdPlugins::setIsBuiltIn(const bool &pIsBuiltIn) noexcept
 {
     isBuiltIn_ = std::make_shared<bool>(pIsBuiltIn);
-    dirtyFlag_[7] = true;
+    dirtyFlag_[8] = true;
 }
 void UssdPlugins::setIsBuiltInToNull() noexcept
 {
     isBuiltIn_.reset();
-    dirtyFlag_[7] = true;
+    dirtyFlag_[8] = true;
 }
 
 const bool &UssdPlugins::getValueOfIsPreinstalled() const noexcept
@@ -1052,38 +1074,11 @@ const std::shared_ptr<bool> &UssdPlugins::getIsPreinstalled() const noexcept
 void UssdPlugins::setIsPreinstalled(const bool &pIsPreinstalled) noexcept
 {
     isPreinstalled_ = std::make_shared<bool>(pIsPreinstalled);
-    dirtyFlag_[8] = true;
+    dirtyFlag_[9] = true;
 }
 void UssdPlugins::setIsPreinstalledToNull() noexcept
 {
     isPreinstalled_.reset();
-    dirtyFlag_[8] = true;
-}
-
-const std::string &UssdPlugins::getValueOfBusinessId() const noexcept
-{
-    static const std::string defaultValue = std::string();
-    if(businessId_)
-        return *businessId_;
-    return defaultValue;
-}
-const std::shared_ptr<std::string> &UssdPlugins::getBusinessId() const noexcept
-{
-    return businessId_;
-}
-void UssdPlugins::setBusinessId(const std::string &pBusinessId) noexcept
-{
-    businessId_ = std::make_shared<std::string>(pBusinessId);
-    dirtyFlag_[9] = true;
-}
-void UssdPlugins::setBusinessId(std::string &&pBusinessId) noexcept
-{
-    businessId_ = std::make_shared<std::string>(std::move(pBusinessId));
-    dirtyFlag_[9] = true;
-}
-void UssdPlugins::setBusinessIdToNull() noexcept
-{
-    businessId_.reset();
     dirtyFlag_[9] = true;
 }
 
@@ -1169,12 +1164,12 @@ const std::vector<std::string> &UssdPlugins::insertColumns() noexcept
         "name",
         "description",
         "category",
+        "author",
         "default_config",
         "spec",
         "is_active",
         "is_built_in",
         "is_preinstalled",
-        "business_id",
         "version",
         "created_at",
         "updated_at"
@@ -1230,6 +1225,17 @@ void UssdPlugins::outputArgs(drogon::orm::internal::SqlBinder &binder) const
     }
     if(dirtyFlag_[4])
     {
+        if(getAuthor())
+        {
+            binder << getValueOfAuthor();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+    if(dirtyFlag_[5])
+    {
         if(getDefaultConfig())
         {
             binder << getValueOfDefaultConfig();
@@ -1239,7 +1245,7 @@ void UssdPlugins::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[5])
+    if(dirtyFlag_[6])
     {
         if(getSpec())
         {
@@ -1250,7 +1256,7 @@ void UssdPlugins::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[6])
+    if(dirtyFlag_[7])
     {
         if(getIsActive())
         {
@@ -1261,7 +1267,7 @@ void UssdPlugins::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[7])
+    if(dirtyFlag_[8])
     {
         if(getIsBuiltIn())
         {
@@ -1272,22 +1278,11 @@ void UssdPlugins::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[8])
+    if(dirtyFlag_[9])
     {
         if(getIsPreinstalled())
         {
             binder << getValueOfIsPreinstalled();
-        }
-        else
-        {
-            binder << nullptr;
-        }
-    }
-    if(dirtyFlag_[9])
-    {
-        if(getBusinessId())
-        {
-            binder << getValueOfBusinessId();
         }
         else
         {
@@ -1435,6 +1430,17 @@ void UssdPlugins::updateArgs(drogon::orm::internal::SqlBinder &binder) const
     }
     if(dirtyFlag_[4])
     {
+        if(getAuthor())
+        {
+            binder << getValueOfAuthor();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+    if(dirtyFlag_[5])
+    {
         if(getDefaultConfig())
         {
             binder << getValueOfDefaultConfig();
@@ -1444,7 +1450,7 @@ void UssdPlugins::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[5])
+    if(dirtyFlag_[6])
     {
         if(getSpec())
         {
@@ -1455,7 +1461,7 @@ void UssdPlugins::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[6])
+    if(dirtyFlag_[7])
     {
         if(getIsActive())
         {
@@ -1466,7 +1472,7 @@ void UssdPlugins::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[7])
+    if(dirtyFlag_[8])
     {
         if(getIsBuiltIn())
         {
@@ -1477,22 +1483,11 @@ void UssdPlugins::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[8])
+    if(dirtyFlag_[9])
     {
         if(getIsPreinstalled())
         {
             binder << getValueOfIsPreinstalled();
-        }
-        else
-        {
-            binder << nullptr;
-        }
-    }
-    if(dirtyFlag_[9])
-    {
-        if(getBusinessId())
-        {
-            binder << getValueOfBusinessId();
         }
         else
         {
@@ -1568,6 +1563,14 @@ Json::Value UssdPlugins::toJson() const
     {
         ret["category"]=Json::Value();
     }
+    if(getAuthor())
+    {
+        ret["author"]=getValueOfAuthor();
+    }
+    else
+    {
+        ret["author"]=Json::Value();
+    }
     if(getDefaultConfig())
     {
         ret["default_config"]=getValueOfDefaultConfig();
@@ -1607,14 +1610,6 @@ Json::Value UssdPlugins::toJson() const
     else
     {
         ret["is_preinstalled"]=Json::Value();
-    }
-    if(getBusinessId())
-    {
-        ret["business_id"]=getValueOfBusinessId();
-    }
-    else
-    {
-        ret["business_id"]=Json::Value();
     }
     if(getVersion())
     {
@@ -1700,9 +1695,9 @@ Json::Value UssdPlugins::toMasqueradedJson(
         }
         if(!pMasqueradingVector[4].empty())
         {
-            if(getDefaultConfig())
+            if(getAuthor())
             {
-                ret[pMasqueradingVector[4]]=getValueOfDefaultConfig();
+                ret[pMasqueradingVector[4]]=getValueOfAuthor();
             }
             else
             {
@@ -1711,9 +1706,9 @@ Json::Value UssdPlugins::toMasqueradedJson(
         }
         if(!pMasqueradingVector[5].empty())
         {
-            if(getSpec())
+            if(getDefaultConfig())
             {
-                ret[pMasqueradingVector[5]]=getValueOfSpec();
+                ret[pMasqueradingVector[5]]=getValueOfDefaultConfig();
             }
             else
             {
@@ -1722,9 +1717,9 @@ Json::Value UssdPlugins::toMasqueradedJson(
         }
         if(!pMasqueradingVector[6].empty())
         {
-            if(getIsActive())
+            if(getSpec())
             {
-                ret[pMasqueradingVector[6]]=getValueOfIsActive();
+                ret[pMasqueradingVector[6]]=getValueOfSpec();
             }
             else
             {
@@ -1733,9 +1728,9 @@ Json::Value UssdPlugins::toMasqueradedJson(
         }
         if(!pMasqueradingVector[7].empty())
         {
-            if(getIsBuiltIn())
+            if(getIsActive())
             {
-                ret[pMasqueradingVector[7]]=getValueOfIsBuiltIn();
+                ret[pMasqueradingVector[7]]=getValueOfIsActive();
             }
             else
             {
@@ -1744,9 +1739,9 @@ Json::Value UssdPlugins::toMasqueradedJson(
         }
         if(!pMasqueradingVector[8].empty())
         {
-            if(getIsPreinstalled())
+            if(getIsBuiltIn())
             {
-                ret[pMasqueradingVector[8]]=getValueOfIsPreinstalled();
+                ret[pMasqueradingVector[8]]=getValueOfIsBuiltIn();
             }
             else
             {
@@ -1755,9 +1750,9 @@ Json::Value UssdPlugins::toMasqueradedJson(
         }
         if(!pMasqueradingVector[9].empty())
         {
-            if(getBusinessId())
+            if(getIsPreinstalled())
             {
-                ret[pMasqueradingVector[9]]=getValueOfBusinessId();
+                ret[pMasqueradingVector[9]]=getValueOfIsPreinstalled();
             }
             else
             {
@@ -1832,6 +1827,14 @@ Json::Value UssdPlugins::toMasqueradedJson(
     {
         ret["category"]=Json::Value();
     }
+    if(getAuthor())
+    {
+        ret["author"]=getValueOfAuthor();
+    }
+    else
+    {
+        ret["author"]=Json::Value();
+    }
     if(getDefaultConfig())
     {
         ret["default_config"]=getValueOfDefaultConfig();
@@ -1871,14 +1874,6 @@ Json::Value UssdPlugins::toMasqueradedJson(
     else
     {
         ret["is_preinstalled"]=Json::Value();
-    }
-    if(getBusinessId())
-    {
-        ret["business_id"]=getValueOfBusinessId();
-    }
-    else
-    {
-        ret["business_id"]=Json::Value();
     }
     if(getVersion())
     {
@@ -1939,34 +1934,39 @@ bool UssdPlugins::validateJsonForCreation(const Json::Value &pJson, std::string 
         err="The category column cannot be null";
         return false;
     }
+    if(pJson.isMember("author"))
+    {
+        if(!validJsonOfField(4, "author", pJson["author"], err, true))
+            return false;
+    }
+    else
+    {
+        err="The author column cannot be null";
+        return false;
+    }
     if(pJson.isMember("default_config"))
     {
-        if(!validJsonOfField(4, "default_config", pJson["default_config"], err, true))
+        if(!validJsonOfField(5, "default_config", pJson["default_config"], err, true))
             return false;
     }
     if(pJson.isMember("spec"))
     {
-        if(!validJsonOfField(5, "spec", pJson["spec"], err, true))
+        if(!validJsonOfField(6, "spec", pJson["spec"], err, true))
             return false;
     }
     if(pJson.isMember("is_active"))
     {
-        if(!validJsonOfField(6, "is_active", pJson["is_active"], err, true))
+        if(!validJsonOfField(7, "is_active", pJson["is_active"], err, true))
             return false;
     }
     if(pJson.isMember("is_built_in"))
     {
-        if(!validJsonOfField(7, "is_built_in", pJson["is_built_in"], err, true))
+        if(!validJsonOfField(8, "is_built_in", pJson["is_built_in"], err, true))
             return false;
     }
     if(pJson.isMember("is_preinstalled"))
     {
-        if(!validJsonOfField(8, "is_preinstalled", pJson["is_preinstalled"], err, true))
-            return false;
-    }
-    if(pJson.isMember("business_id"))
-    {
-        if(!validJsonOfField(9, "business_id", pJson["business_id"], err, true))
+        if(!validJsonOfField(9, "is_preinstalled", pJson["is_preinstalled"], err, true))
             return false;
     }
     if(pJson.isMember("version"))
@@ -2045,6 +2045,11 @@ bool UssdPlugins::validateMasqueradedJsonForCreation(const Json::Value &pJson,
               if(!validJsonOfField(4, pMasqueradingVector[4], pJson[pMasqueradingVector[4]], err, true))
                   return false;
           }
+        else
+        {
+            err="The " + pMasqueradingVector[4] + " column cannot be null";
+            return false;
+        }
       }
       if(!pMasqueradingVector[5].empty())
       {
@@ -2145,34 +2150,34 @@ bool UssdPlugins::validateJsonForUpdate(const Json::Value &pJson, std::string &e
         if(!validJsonOfField(3, "category", pJson["category"], err, false))
             return false;
     }
+    if(pJson.isMember("author"))
+    {
+        if(!validJsonOfField(4, "author", pJson["author"], err, false))
+            return false;
+    }
     if(pJson.isMember("default_config"))
     {
-        if(!validJsonOfField(4, "default_config", pJson["default_config"], err, false))
+        if(!validJsonOfField(5, "default_config", pJson["default_config"], err, false))
             return false;
     }
     if(pJson.isMember("spec"))
     {
-        if(!validJsonOfField(5, "spec", pJson["spec"], err, false))
+        if(!validJsonOfField(6, "spec", pJson["spec"], err, false))
             return false;
     }
     if(pJson.isMember("is_active"))
     {
-        if(!validJsonOfField(6, "is_active", pJson["is_active"], err, false))
+        if(!validJsonOfField(7, "is_active", pJson["is_active"], err, false))
             return false;
     }
     if(pJson.isMember("is_built_in"))
     {
-        if(!validJsonOfField(7, "is_built_in", pJson["is_built_in"], err, false))
+        if(!validJsonOfField(8, "is_built_in", pJson["is_built_in"], err, false))
             return false;
     }
     if(pJson.isMember("is_preinstalled"))
     {
-        if(!validJsonOfField(8, "is_preinstalled", pJson["is_preinstalled"], err, false))
-            return false;
-    }
-    if(pJson.isMember("business_id"))
-    {
-        if(!validJsonOfField(9, "business_id", pJson["business_id"], err, false))
+        if(!validJsonOfField(9, "is_preinstalled", pJson["is_preinstalled"], err, false))
             return false;
     }
     if(pJson.isMember("version"))
@@ -2354,11 +2359,20 @@ bool UssdPlugins::validJsonOfField(size_t index,
         case 4:
             if(pJson.isNull())
             {
-                return true;
+                err="The " + fieldName + " column cannot be null";
+                return false;
             }
             if(!pJson.isString())
             {
                 err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            if(pJson.isString() && std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t>{}
+                .from_bytes(pJson.asCString()).size() > 150)
+            {
+                err="String length exceeds limit for the " +
+                    fieldName +
+                    " field (the maximum value is 150)";
                 return false;
             }
             break;
@@ -2378,7 +2392,7 @@ bool UssdPlugins::validJsonOfField(size_t index,
             {
                 return true;
             }
-            if(!pJson.isBool())
+            if(!pJson.isString())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;
@@ -2411,7 +2425,7 @@ bool UssdPlugins::validJsonOfField(size_t index,
             {
                 return true;
             }
-            if(!pJson.isString())
+            if(!pJson.isBool())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;

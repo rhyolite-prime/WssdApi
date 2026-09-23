@@ -560,3 +560,7 @@ FodyWeavers.xsd
 *.tlog
 
 # End of https://www.toptal.com/developers/gitignore/api/intellij+all,visualstudio,visualstudiocode,cmake,c,c++
+
+# WssdApi: Sapo engine runtime state (file state-store checkpoints) and logs
+/sapo/state-store/
+*.sapo.log

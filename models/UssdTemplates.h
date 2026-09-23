@@ -49,6 +49,7 @@ class UssdTemplates
         static const std::string _description;
         static const std::string _language_code;
         static const std::string _category;
+        static const std::string _author;
         static const std::string _default_config;
         static const std::string _spec;
         static const std::string _is_active;
@@ -152,6 +153,15 @@ class UssdTemplates
     void setCategory(const std::string &pCategory) noexcept;
     void setCategory(std::string &&pCategory) noexcept;
 
+    /**  For column author  */
+    ///Get the value of the column author, returns the default value if the column is null
+    const std::string &getValueOfAuthor() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<std::string> &getAuthor() const noexcept;
+    ///Set the value of the column author
+    void setAuthor(const std::string &pAuthor) noexcept;
+    void setAuthor(std::string &&pAuthor) noexcept;
+
     /**  For column default_config  */
     ///Get the value of the column default_config, returns the default value if the column is null
     const std::string &getValueOfDefaultConfig() const noexcept;
@@ -200,7 +210,7 @@ class UssdTemplates
     void setUpdatedAtToNull() noexcept;
 
 
-    static size_t getColumnNumber() noexcept {  return 10;  }
+    static size_t getColumnNumber() noexcept {  return 11;  }
     static const std::string &getColumnName(size_t index) noexcept(false);
 
     Json::Value toJson() const;
@@ -227,6 +237,7 @@ class UssdTemplates
     std::shared_ptr<std::string> description_;
     std::shared_ptr<std::string> languageCode_;
     std::shared_ptr<std::string> category_;
+    std::shared_ptr<std::string> author_;
     std::shared_ptr<std::string> defaultConfig_;
     std::shared_ptr<std::string> spec_;
     std::shared_ptr<bool> isActive_;
@@ -243,7 +254,7 @@ class UssdTemplates
         const bool notNull_;
     };
     static const std::vector<MetaData> metaData_;
-    bool dirtyFlag_[10]={ false };
+    bool dirtyFlag_[11]={ false };
   public:
     static const std::string &sqlForFindingByPrimaryKey()
     {
@@ -288,33 +299,38 @@ class UssdTemplates
             sql += "category,";
             ++parametersCount;
         }
-        sql += "default_config,";
-        ++parametersCount;
-        if(!dirtyFlag_[5])
+        if(dirtyFlag_[5])
         {
-            needSelection=true;
+            sql += "author,";
+            ++parametersCount;
         }
-        sql += "spec,";
+        sql += "default_config,";
         ++parametersCount;
         if(!dirtyFlag_[6])
         {
             needSelection=true;
         }
-        sql += "is_active,";
+        sql += "spec,";
         ++parametersCount;
         if(!dirtyFlag_[7])
         {
             needSelection=true;
         }
-        sql += "created_at,";
+        sql += "is_active,";
         ++parametersCount;
         if(!dirtyFlag_[8])
         {
             needSelection=true;
         }
-        sql += "updated_at,";
+        sql += "created_at,";
         ++parametersCount;
         if(!dirtyFlag_[9])
+        {
+            needSelection=true;
+        }
+        sql += "updated_at,";
+        ++parametersCount;
+        if(!dirtyFlag_[10])
         {
             needSelection=true;
         }
@@ -367,10 +383,6 @@ class UssdTemplates
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);
         }
-        else
-        {
-            sql +="default,";
-        }
         if(dirtyFlag_[6])
         {
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
@@ -399,6 +411,15 @@ class UssdTemplates
             sql +="default,";
         }
         if(dirtyFlag_[9])
+        {
+            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
+            sql.append(placeholderStr, n);
+        }
+        else
+        {
+            sql +="default,";
+        }
+        if(dirtyFlag_[10])
         {
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);

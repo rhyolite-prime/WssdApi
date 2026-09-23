@@ -20,10 +20,8 @@ const std::string WssdRegistry::Cols::_display_title = "\"display_title\"";
 const std::string WssdRegistry::Cols::_description = "\"description\"";
 const std::string WssdRegistry::Cols::_activated_on = "\"activated_on\"";
 const std::string WssdRegistry::Cols::_logo_url = "\"logo_url\"";
-const std::string WssdRegistry::Cols::_is_wssd_active = "\"is_wssd_active\"";
-const std::string WssdRegistry::Cols::_is_ussd_active = "\"is_ussd_active\"";
-const std::string WssdRegistry::Cols::_use_as_secondary_service = "\"use_as_secondary_service\"";
 const std::string WssdRegistry::Cols::_tenant_id = "\"tenant_id\"";
+const std::string WssdRegistry::Cols::_service_type = "\"service_type\"";
 const std::string WssdRegistry::Cols::_rank = "\"rank\"";
 const std::string WssdRegistry::Cols::_merchant_identifier = "\"merchant_identifier\"";
 const std::string WssdRegistry::Cols::_category = "\"category\"";
@@ -43,10 +41,8 @@ const std::vector<typename WssdRegistry::MetaData> WssdRegistry::metaData_={
 {"description","std::string","character varying",250,0,0,0},
 {"activated_on","::trantor::Date","timestamp with time zone",0,0,0,0},
 {"logo_url","std::string","character varying",300,0,0,0},
-{"is_wssd_active","bool","boolean",1,0,0,1},
-{"is_ussd_active","bool","boolean",1,0,0,1},
-{"use_as_secondary_service","bool","boolean",1,0,0,1},
 {"tenant_id","int32_t","integer",4,0,0,1},
+{"service_type","int32_t","integer",4,0,0,1},
 {"rank","int32_t","integer",4,0,0,1},
 {"merchant_identifier","std::string","character varying",50,0,0,0},
 {"category","std::string","character varying",80,0,0,0},
@@ -110,21 +106,13 @@ WssdRegistry::WssdRegistry(const Row &r, const ssize_t indexOffset) noexcept
         {
             logoUrl_=std::make_shared<std::string>(r["logo_url"].as<std::string>());
         }
-        if(!r["is_wssd_active"].isNull())
-        {
-            isWssdActive_=std::make_shared<bool>(r["is_wssd_active"].as<bool>());
-        }
-        if(!r["is_ussd_active"].isNull())
-        {
-            isUssdActive_=std::make_shared<bool>(r["is_ussd_active"].as<bool>());
-        }
-        if(!r["use_as_secondary_service"].isNull())
-        {
-            useAsSecondaryService_=std::make_shared<bool>(r["use_as_secondary_service"].as<bool>());
-        }
         if(!r["tenant_id"].isNull())
         {
             tenantId_=std::make_shared<int32_t>(r["tenant_id"].as<int32_t>());
+        }
+        if(!r["service_type"].isNull())
+        {
+            serviceType_=std::make_shared<int32_t>(r["service_type"].as<int32_t>());
         }
         if(!r["rank"].isNull())
         {
@@ -194,7 +182,7 @@ WssdRegistry::WssdRegistry(const Row &r, const ssize_t indexOffset) noexcept
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 18 > r.size())
+        if(offset + 16 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -256,49 +244,39 @@ WssdRegistry::WssdRegistry(const Row &r, const ssize_t indexOffset) noexcept
         index = offset + 7;
         if(!r[index].isNull())
         {
-            isWssdActive_=std::make_shared<bool>(r[index].as<bool>());
+            tenantId_=std::make_shared<int32_t>(r[index].as<int32_t>());
         }
         index = offset + 8;
         if(!r[index].isNull())
         {
-            isUssdActive_=std::make_shared<bool>(r[index].as<bool>());
+            serviceType_=std::make_shared<int32_t>(r[index].as<int32_t>());
         }
         index = offset + 9;
         if(!r[index].isNull())
         {
-            useAsSecondaryService_=std::make_shared<bool>(r[index].as<bool>());
+            rank_=std::make_shared<int32_t>(r[index].as<int32_t>());
         }
         index = offset + 10;
         if(!r[index].isNull())
         {
-            tenantId_=std::make_shared<int32_t>(r[index].as<int32_t>());
+            merchantIdentifier_=std::make_shared<std::string>(r[index].as<std::string>());
         }
         index = offset + 11;
         if(!r[index].isNull())
         {
-            rank_=std::make_shared<int32_t>(r[index].as<int32_t>());
+            category_=std::make_shared<std::string>(r[index].as<std::string>());
         }
         index = offset + 12;
         if(!r[index].isNull())
         {
-            merchantIdentifier_=std::make_shared<std::string>(r[index].as<std::string>());
+            businessName_=std::make_shared<std::string>(r[index].as<std::string>());
         }
         index = offset + 13;
         if(!r[index].isNull())
         {
-            category_=std::make_shared<std::string>(r[index].as<std::string>());
-        }
-        index = offset + 14;
-        if(!r[index].isNull())
-        {
-            businessName_=std::make_shared<std::string>(r[index].as<std::string>());
-        }
-        index = offset + 15;
-        if(!r[index].isNull())
-        {
             executable_=std::make_shared<std::string>(r[index].as<std::string>());
         }
-        index = offset + 16;
+        index = offset + 14;
         if(!r[index].isNull())
         {
             auto timeStr = r[index].as<std::string>();
@@ -321,7 +299,7 @@ WssdRegistry::WssdRegistry(const Row &r, const ssize_t indexOffset) noexcept
                 createdAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
             }
         }
-        index = offset + 17;
+        index = offset + 15;
         if(!r[index].isNull())
         {
             auto timeStr = r[index].as<std::string>();
@@ -350,7 +328,7 @@ WssdRegistry::WssdRegistry(const Row &r, const ssize_t indexOffset) noexcept
 
 WssdRegistry::WssdRegistry(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 18)
+    if(pMasqueradingVector.size() != 16)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -434,7 +412,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson, const std::vector<std::stri
         dirtyFlag_[7] = true;
         if(!pJson[pMasqueradingVector[7]].isNull())
         {
-            isWssdActive_=std::make_shared<bool>(pJson[pMasqueradingVector[7]].asBool());
+            tenantId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[7]].asInt64());
         }
     }
     if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
@@ -442,7 +420,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson, const std::vector<std::stri
         dirtyFlag_[8] = true;
         if(!pJson[pMasqueradingVector[8]].isNull())
         {
-            isUssdActive_=std::make_shared<bool>(pJson[pMasqueradingVector[8]].asBool());
+            serviceType_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[8]].asInt64());
         }
     }
     if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
@@ -450,7 +428,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson, const std::vector<std::stri
         dirtyFlag_[9] = true;
         if(!pJson[pMasqueradingVector[9]].isNull())
         {
-            useAsSecondaryService_=std::make_shared<bool>(pJson[pMasqueradingVector[9]].asBool());
+            rank_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[9]].asInt64());
         }
     }
     if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
@@ -458,7 +436,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson, const std::vector<std::stri
         dirtyFlag_[10] = true;
         if(!pJson[pMasqueradingVector[10]].isNull())
         {
-            tenantId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[10]].asInt64());
+            merchantIdentifier_=std::make_shared<std::string>(pJson[pMasqueradingVector[10]].asString());
         }
     }
     if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
@@ -466,7 +444,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson, const std::vector<std::stri
         dirtyFlag_[11] = true;
         if(!pJson[pMasqueradingVector[11]].isNull())
         {
-            rank_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[11]].asInt64());
+            category_=std::make_shared<std::string>(pJson[pMasqueradingVector[11]].asString());
         }
     }
     if(!pMasqueradingVector[12].empty() && pJson.isMember(pMasqueradingVector[12]))
@@ -474,7 +452,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson, const std::vector<std::stri
         dirtyFlag_[12] = true;
         if(!pJson[pMasqueradingVector[12]].isNull())
         {
-            merchantIdentifier_=std::make_shared<std::string>(pJson[pMasqueradingVector[12]].asString());
+            businessName_=std::make_shared<std::string>(pJson[pMasqueradingVector[12]].asString());
         }
     }
     if(!pMasqueradingVector[13].empty() && pJson.isMember(pMasqueradingVector[13]))
@@ -482,7 +460,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson, const std::vector<std::stri
         dirtyFlag_[13] = true;
         if(!pJson[pMasqueradingVector[13]].isNull())
         {
-            category_=std::make_shared<std::string>(pJson[pMasqueradingVector[13]].asString());
+            executable_=std::make_shared<std::string>(pJson[pMasqueradingVector[13]].asString());
         }
     }
     if(!pMasqueradingVector[14].empty() && pJson.isMember(pMasqueradingVector[14]))
@@ -490,23 +468,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson, const std::vector<std::stri
         dirtyFlag_[14] = true;
         if(!pJson[pMasqueradingVector[14]].isNull())
         {
-            businessName_=std::make_shared<std::string>(pJson[pMasqueradingVector[14]].asString());
-        }
-    }
-    if(!pMasqueradingVector[15].empty() && pJson.isMember(pMasqueradingVector[15]))
-    {
-        dirtyFlag_[15] = true;
-        if(!pJson[pMasqueradingVector[15]].isNull())
-        {
-            executable_=std::make_shared<std::string>(pJson[pMasqueradingVector[15]].asString());
-        }
-    }
-    if(!pMasqueradingVector[16].empty() && pJson.isMember(pMasqueradingVector[16]))
-    {
-        dirtyFlag_[16] = true;
-        if(!pJson[pMasqueradingVector[16]].isNull())
-        {
-            auto timeStr = pJson[pMasqueradingVector[16]].asString();
+            auto timeStr = pJson[pMasqueradingVector[14]].asString();
             struct tm stm;
             memset(&stm,0,sizeof(stm));
             auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
@@ -527,12 +489,12 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson, const std::vector<std::stri
             }
         }
     }
-    if(!pMasqueradingVector[17].empty() && pJson.isMember(pMasqueradingVector[17]))
+    if(!pMasqueradingVector[15].empty() && pJson.isMember(pMasqueradingVector[15]))
     {
-        dirtyFlag_[17] = true;
-        if(!pJson[pMasqueradingVector[17]].isNull())
+        dirtyFlag_[15] = true;
+        if(!pJson[pMasqueradingVector[15]].isNull())
         {
-            auto timeStr = pJson[pMasqueradingVector[17]].asString();
+            auto timeStr = pJson[pMasqueradingVector[15]].asString();
             struct tm stm;
             memset(&stm,0,sizeof(stm));
             auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
@@ -631,41 +593,25 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson) noexcept(false)
             logoUrl_=std::make_shared<std::string>(pJson["logo_url"].asString());
         }
     }
-    if(pJson.isMember("is_wssd_active"))
-    {
-        dirtyFlag_[7]=true;
-        if(!pJson["is_wssd_active"].isNull())
-        {
-            isWssdActive_=std::make_shared<bool>(pJson["is_wssd_active"].asBool());
-        }
-    }
-    if(pJson.isMember("is_ussd_active"))
-    {
-        dirtyFlag_[8]=true;
-        if(!pJson["is_ussd_active"].isNull())
-        {
-            isUssdActive_=std::make_shared<bool>(pJson["is_ussd_active"].asBool());
-        }
-    }
-    if(pJson.isMember("use_as_secondary_service"))
-    {
-        dirtyFlag_[9]=true;
-        if(!pJson["use_as_secondary_service"].isNull())
-        {
-            useAsSecondaryService_=std::make_shared<bool>(pJson["use_as_secondary_service"].asBool());
-        }
-    }
     if(pJson.isMember("tenant_id"))
     {
-        dirtyFlag_[10]=true;
+        dirtyFlag_[7]=true;
         if(!pJson["tenant_id"].isNull())
         {
             tenantId_=std::make_shared<int32_t>((int32_t)pJson["tenant_id"].asInt64());
         }
     }
+    if(pJson.isMember("service_type"))
+    {
+        dirtyFlag_[8]=true;
+        if(!pJson["service_type"].isNull())
+        {
+            serviceType_=std::make_shared<int32_t>((int32_t)pJson["service_type"].asInt64());
+        }
+    }
     if(pJson.isMember("rank"))
     {
-        dirtyFlag_[11]=true;
+        dirtyFlag_[9]=true;
         if(!pJson["rank"].isNull())
         {
             rank_=std::make_shared<int32_t>((int32_t)pJson["rank"].asInt64());
@@ -673,7 +619,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("merchant_identifier"))
     {
-        dirtyFlag_[12]=true;
+        dirtyFlag_[10]=true;
         if(!pJson["merchant_identifier"].isNull())
         {
             merchantIdentifier_=std::make_shared<std::string>(pJson["merchant_identifier"].asString());
@@ -681,7 +627,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("category"))
     {
-        dirtyFlag_[13]=true;
+        dirtyFlag_[11]=true;
         if(!pJson["category"].isNull())
         {
             category_=std::make_shared<std::string>(pJson["category"].asString());
@@ -689,7 +635,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("business_name"))
     {
-        dirtyFlag_[14]=true;
+        dirtyFlag_[12]=true;
         if(!pJson["business_name"].isNull())
         {
             businessName_=std::make_shared<std::string>(pJson["business_name"].asString());
@@ -697,7 +643,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("executable"))
     {
-        dirtyFlag_[15]=true;
+        dirtyFlag_[13]=true;
         if(!pJson["executable"].isNull())
         {
             executable_=std::make_shared<std::string>(pJson["executable"].asString());
@@ -705,7 +651,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("created_at"))
     {
-        dirtyFlag_[16]=true;
+        dirtyFlag_[14]=true;
         if(!pJson["created_at"].isNull())
         {
             auto timeStr = pJson["created_at"].asString();
@@ -731,7 +677,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("updated_at"))
     {
-        dirtyFlag_[17]=true;
+        dirtyFlag_[15]=true;
         if(!pJson["updated_at"].isNull())
         {
             auto timeStr = pJson["updated_at"].asString();
@@ -760,7 +706,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson) noexcept(false)
 void WssdRegistry::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 18)
+    if(pMasqueradingVector.size() != 16)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -843,7 +789,7 @@ void WssdRegistry::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[7] = true;
         if(!pJson[pMasqueradingVector[7]].isNull())
         {
-            isWssdActive_=std::make_shared<bool>(pJson[pMasqueradingVector[7]].asBool());
+            tenantId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[7]].asInt64());
         }
     }
     if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
@@ -851,7 +797,7 @@ void WssdRegistry::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[8] = true;
         if(!pJson[pMasqueradingVector[8]].isNull())
         {
-            isUssdActive_=std::make_shared<bool>(pJson[pMasqueradingVector[8]].asBool());
+            serviceType_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[8]].asInt64());
         }
     }
     if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
@@ -859,7 +805,7 @@ void WssdRegistry::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[9] = true;
         if(!pJson[pMasqueradingVector[9]].isNull())
         {
-            useAsSecondaryService_=std::make_shared<bool>(pJson[pMasqueradingVector[9]].asBool());
+            rank_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[9]].asInt64());
         }
     }
     if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
@@ -867,7 +813,7 @@ void WssdRegistry::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[10] = true;
         if(!pJson[pMasqueradingVector[10]].isNull())
         {
-            tenantId_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[10]].asInt64());
+            merchantIdentifier_=std::make_shared<std::string>(pJson[pMasqueradingVector[10]].asString());
         }
     }
     if(!pMasqueradingVector[11].empty() && pJson.isMember(pMasqueradingVector[11]))
@@ -875,7 +821,7 @@ void WssdRegistry::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[11] = true;
         if(!pJson[pMasqueradingVector[11]].isNull())
         {
-            rank_=std::make_shared<int32_t>((int32_t)pJson[pMasqueradingVector[11]].asInt64());
+            category_=std::make_shared<std::string>(pJson[pMasqueradingVector[11]].asString());
         }
     }
     if(!pMasqueradingVector[12].empty() && pJson.isMember(pMasqueradingVector[12]))
@@ -883,7 +829,7 @@ void WssdRegistry::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[12] = true;
         if(!pJson[pMasqueradingVector[12]].isNull())
         {
-            merchantIdentifier_=std::make_shared<std::string>(pJson[pMasqueradingVector[12]].asString());
+            businessName_=std::make_shared<std::string>(pJson[pMasqueradingVector[12]].asString());
         }
     }
     if(!pMasqueradingVector[13].empty() && pJson.isMember(pMasqueradingVector[13]))
@@ -891,7 +837,7 @@ void WssdRegistry::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[13] = true;
         if(!pJson[pMasqueradingVector[13]].isNull())
         {
-            category_=std::make_shared<std::string>(pJson[pMasqueradingVector[13]].asString());
+            executable_=std::make_shared<std::string>(pJson[pMasqueradingVector[13]].asString());
         }
     }
     if(!pMasqueradingVector[14].empty() && pJson.isMember(pMasqueradingVector[14]))
@@ -899,23 +845,7 @@ void WssdRegistry::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[14] = true;
         if(!pJson[pMasqueradingVector[14]].isNull())
         {
-            businessName_=std::make_shared<std::string>(pJson[pMasqueradingVector[14]].asString());
-        }
-    }
-    if(!pMasqueradingVector[15].empty() && pJson.isMember(pMasqueradingVector[15]))
-    {
-        dirtyFlag_[15] = true;
-        if(!pJson[pMasqueradingVector[15]].isNull())
-        {
-            executable_=std::make_shared<std::string>(pJson[pMasqueradingVector[15]].asString());
-        }
-    }
-    if(!pMasqueradingVector[16].empty() && pJson.isMember(pMasqueradingVector[16]))
-    {
-        dirtyFlag_[16] = true;
-        if(!pJson[pMasqueradingVector[16]].isNull())
-        {
-            auto timeStr = pJson[pMasqueradingVector[16]].asString();
+            auto timeStr = pJson[pMasqueradingVector[14]].asString();
             struct tm stm;
             memset(&stm,0,sizeof(stm));
             auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
@@ -936,12 +866,12 @@ void WssdRegistry::updateByMasqueradedJson(const Json::Value &pJson,
             }
         }
     }
-    if(!pMasqueradingVector[17].empty() && pJson.isMember(pMasqueradingVector[17]))
+    if(!pMasqueradingVector[15].empty() && pJson.isMember(pMasqueradingVector[15]))
     {
-        dirtyFlag_[17] = true;
-        if(!pJson[pMasqueradingVector[17]].isNull())
+        dirtyFlag_[15] = true;
+        if(!pJson[pMasqueradingVector[15]].isNull())
         {
-            auto timeStr = pJson[pMasqueradingVector[17]].asString();
+            auto timeStr = pJson[pMasqueradingVector[15]].asString();
             struct tm stm;
             memset(&stm,0,sizeof(stm));
             auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
@@ -1039,41 +969,25 @@ void WssdRegistry::updateByJson(const Json::Value &pJson) noexcept(false)
             logoUrl_=std::make_shared<std::string>(pJson["logo_url"].asString());
         }
     }
-    if(pJson.isMember("is_wssd_active"))
-    {
-        dirtyFlag_[7] = true;
-        if(!pJson["is_wssd_active"].isNull())
-        {
-            isWssdActive_=std::make_shared<bool>(pJson["is_wssd_active"].asBool());
-        }
-    }
-    if(pJson.isMember("is_ussd_active"))
-    {
-        dirtyFlag_[8] = true;
-        if(!pJson["is_ussd_active"].isNull())
-        {
-            isUssdActive_=std::make_shared<bool>(pJson["is_ussd_active"].asBool());
-        }
-    }
-    if(pJson.isMember("use_as_secondary_service"))
-    {
-        dirtyFlag_[9] = true;
-        if(!pJson["use_as_secondary_service"].isNull())
-        {
-            useAsSecondaryService_=std::make_shared<bool>(pJson["use_as_secondary_service"].asBool());
-        }
-    }
     if(pJson.isMember("tenant_id"))
     {
-        dirtyFlag_[10] = true;
+        dirtyFlag_[7] = true;
         if(!pJson["tenant_id"].isNull())
         {
             tenantId_=std::make_shared<int32_t>((int32_t)pJson["tenant_id"].asInt64());
         }
     }
+    if(pJson.isMember("service_type"))
+    {
+        dirtyFlag_[8] = true;
+        if(!pJson["service_type"].isNull())
+        {
+            serviceType_=std::make_shared<int32_t>((int32_t)pJson["service_type"].asInt64());
+        }
+    }
     if(pJson.isMember("rank"))
     {
-        dirtyFlag_[11] = true;
+        dirtyFlag_[9] = true;
         if(!pJson["rank"].isNull())
         {
             rank_=std::make_shared<int32_t>((int32_t)pJson["rank"].asInt64());
@@ -1081,7 +995,7 @@ void WssdRegistry::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("merchant_identifier"))
     {
-        dirtyFlag_[12] = true;
+        dirtyFlag_[10] = true;
         if(!pJson["merchant_identifier"].isNull())
         {
             merchantIdentifier_=std::make_shared<std::string>(pJson["merchant_identifier"].asString());
@@ -1089,7 +1003,7 @@ void WssdRegistry::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("category"))
     {
-        dirtyFlag_[13] = true;
+        dirtyFlag_[11] = true;
         if(!pJson["category"].isNull())
         {
             category_=std::make_shared<std::string>(pJson["category"].asString());
@@ -1097,7 +1011,7 @@ void WssdRegistry::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("business_name"))
     {
-        dirtyFlag_[14] = true;
+        dirtyFlag_[12] = true;
         if(!pJson["business_name"].isNull())
         {
             businessName_=std::make_shared<std::string>(pJson["business_name"].asString());
@@ -1105,7 +1019,7 @@ void WssdRegistry::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("executable"))
     {
-        dirtyFlag_[15] = true;
+        dirtyFlag_[13] = true;
         if(!pJson["executable"].isNull())
         {
             executable_=std::make_shared<std::string>(pJson["executable"].asString());
@@ -1113,7 +1027,7 @@ void WssdRegistry::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("created_at"))
     {
-        dirtyFlag_[16] = true;
+        dirtyFlag_[14] = true;
         if(!pJson["created_at"].isNull())
         {
             auto timeStr = pJson["created_at"].asString();
@@ -1139,7 +1053,7 @@ void WssdRegistry::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("updated_at"))
     {
-        dirtyFlag_[17] = true;
+        dirtyFlag_[15] = true;
         if(!pJson["updated_at"].isNull())
         {
             auto timeStr = pJson["updated_at"].asString();
@@ -1349,57 +1263,6 @@ void WssdRegistry::setLogoUrlToNull() noexcept
     dirtyFlag_[6] = true;
 }
 
-const bool &WssdRegistry::getValueOfIsWssdActive() const noexcept
-{
-    static const bool defaultValue = bool();
-    if(isWssdActive_)
-        return *isWssdActive_;
-    return defaultValue;
-}
-const std::shared_ptr<bool> &WssdRegistry::getIsWssdActive() const noexcept
-{
-    return isWssdActive_;
-}
-void WssdRegistry::setIsWssdActive(const bool &pIsWssdActive) noexcept
-{
-    isWssdActive_ = std::make_shared<bool>(pIsWssdActive);
-    dirtyFlag_[7] = true;
-}
-
-const bool &WssdRegistry::getValueOfIsUssdActive() const noexcept
-{
-    static const bool defaultValue = bool();
-    if(isUssdActive_)
-        return *isUssdActive_;
-    return defaultValue;
-}
-const std::shared_ptr<bool> &WssdRegistry::getIsUssdActive() const noexcept
-{
-    return isUssdActive_;
-}
-void WssdRegistry::setIsUssdActive(const bool &pIsUssdActive) noexcept
-{
-    isUssdActive_ = std::make_shared<bool>(pIsUssdActive);
-    dirtyFlag_[8] = true;
-}
-
-const bool &WssdRegistry::getValueOfUseAsSecondaryService() const noexcept
-{
-    static const bool defaultValue = bool();
-    if(useAsSecondaryService_)
-        return *useAsSecondaryService_;
-    return defaultValue;
-}
-const std::shared_ptr<bool> &WssdRegistry::getUseAsSecondaryService() const noexcept
-{
-    return useAsSecondaryService_;
-}
-void WssdRegistry::setUseAsSecondaryService(const bool &pUseAsSecondaryService) noexcept
-{
-    useAsSecondaryService_ = std::make_shared<bool>(pUseAsSecondaryService);
-    dirtyFlag_[9] = true;
-}
-
 const int32_t &WssdRegistry::getValueOfTenantId() const noexcept
 {
     static const int32_t defaultValue = int32_t();
@@ -1414,7 +1277,24 @@ const std::shared_ptr<int32_t> &WssdRegistry::getTenantId() const noexcept
 void WssdRegistry::setTenantId(const int32_t &pTenantId) noexcept
 {
     tenantId_ = std::make_shared<int32_t>(pTenantId);
-    dirtyFlag_[10] = true;
+    dirtyFlag_[7] = true;
+}
+
+const int32_t &WssdRegistry::getValueOfServiceType() const noexcept
+{
+    static const int32_t defaultValue = int32_t();
+    if(serviceType_)
+        return *serviceType_;
+    return defaultValue;
+}
+const std::shared_ptr<int32_t> &WssdRegistry::getServiceType() const noexcept
+{
+    return serviceType_;
+}
+void WssdRegistry::setServiceType(const int32_t &pServiceType) noexcept
+{
+    serviceType_ = std::make_shared<int32_t>(pServiceType);
+    dirtyFlag_[8] = true;
 }
 
 const int32_t &WssdRegistry::getValueOfRank() const noexcept
@@ -1431,7 +1311,7 @@ const std::shared_ptr<int32_t> &WssdRegistry::getRank() const noexcept
 void WssdRegistry::setRank(const int32_t &pRank) noexcept
 {
     rank_ = std::make_shared<int32_t>(pRank);
-    dirtyFlag_[11] = true;
+    dirtyFlag_[9] = true;
 }
 
 const std::string &WssdRegistry::getValueOfMerchantIdentifier() const noexcept
@@ -1448,17 +1328,17 @@ const std::shared_ptr<std::string> &WssdRegistry::getMerchantIdentifier() const 
 void WssdRegistry::setMerchantIdentifier(const std::string &pMerchantIdentifier) noexcept
 {
     merchantIdentifier_ = std::make_shared<std::string>(pMerchantIdentifier);
-    dirtyFlag_[12] = true;
+    dirtyFlag_[10] = true;
 }
 void WssdRegistry::setMerchantIdentifier(std::string &&pMerchantIdentifier) noexcept
 {
     merchantIdentifier_ = std::make_shared<std::string>(std::move(pMerchantIdentifier));
-    dirtyFlag_[12] = true;
+    dirtyFlag_[10] = true;
 }
 void WssdRegistry::setMerchantIdentifierToNull() noexcept
 {
     merchantIdentifier_.reset();
-    dirtyFlag_[12] = true;
+    dirtyFlag_[10] = true;
 }
 
 const std::string &WssdRegistry::getValueOfCategory() const noexcept
@@ -1475,17 +1355,17 @@ const std::shared_ptr<std::string> &WssdRegistry::getCategory() const noexcept
 void WssdRegistry::setCategory(const std::string &pCategory) noexcept
 {
     category_ = std::make_shared<std::string>(pCategory);
-    dirtyFlag_[13] = true;
+    dirtyFlag_[11] = true;
 }
 void WssdRegistry::setCategory(std::string &&pCategory) noexcept
 {
     category_ = std::make_shared<std::string>(std::move(pCategory));
-    dirtyFlag_[13] = true;
+    dirtyFlag_[11] = true;
 }
 void WssdRegistry::setCategoryToNull() noexcept
 {
     category_.reset();
-    dirtyFlag_[13] = true;
+    dirtyFlag_[11] = true;
 }
 
 const std::string &WssdRegistry::getValueOfBusinessName() const noexcept
@@ -1502,17 +1382,17 @@ const std::shared_ptr<std::string> &WssdRegistry::getBusinessName() const noexce
 void WssdRegistry::setBusinessName(const std::string &pBusinessName) noexcept
 {
     businessName_ = std::make_shared<std::string>(pBusinessName);
-    dirtyFlag_[14] = true;
+    dirtyFlag_[12] = true;
 }
 void WssdRegistry::setBusinessName(std::string &&pBusinessName) noexcept
 {
     businessName_ = std::make_shared<std::string>(std::move(pBusinessName));
-    dirtyFlag_[14] = true;
+    dirtyFlag_[12] = true;
 }
 void WssdRegistry::setBusinessNameToNull() noexcept
 {
     businessName_.reset();
-    dirtyFlag_[14] = true;
+    dirtyFlag_[12] = true;
 }
 
 const std::string &WssdRegistry::getValueOfExecutable() const noexcept
@@ -1529,17 +1409,17 @@ const std::shared_ptr<std::string> &WssdRegistry::getExecutable() const noexcept
 void WssdRegistry::setExecutable(const std::string &pExecutable) noexcept
 {
     executable_ = std::make_shared<std::string>(pExecutable);
-    dirtyFlag_[15] = true;
+    dirtyFlag_[13] = true;
 }
 void WssdRegistry::setExecutable(std::string &&pExecutable) noexcept
 {
     executable_ = std::make_shared<std::string>(std::move(pExecutable));
-    dirtyFlag_[15] = true;
+    dirtyFlag_[13] = true;
 }
 void WssdRegistry::setExecutableToNull() noexcept
 {
     executable_.reset();
-    dirtyFlag_[15] = true;
+    dirtyFlag_[13] = true;
 }
 
 const ::trantor::Date &WssdRegistry::getValueOfCreatedAt() const noexcept
@@ -1556,12 +1436,12 @@ const std::shared_ptr<::trantor::Date> &WssdRegistry::getCreatedAt() const noexc
 void WssdRegistry::setCreatedAt(const ::trantor::Date &pCreatedAt) noexcept
 {
     createdAt_ = std::make_shared<::trantor::Date>(pCreatedAt);
-    dirtyFlag_[16] = true;
+    dirtyFlag_[14] = true;
 }
 void WssdRegistry::setCreatedAtToNull() noexcept
 {
     createdAt_.reset();
-    dirtyFlag_[16] = true;
+    dirtyFlag_[14] = true;
 }
 
 const ::trantor::Date &WssdRegistry::getValueOfUpdatedAt() const noexcept
@@ -1578,12 +1458,12 @@ const std::shared_ptr<::trantor::Date> &WssdRegistry::getUpdatedAt() const noexc
 void WssdRegistry::setUpdatedAt(const ::trantor::Date &pUpdatedAt) noexcept
 {
     updatedAt_ = std::make_shared<::trantor::Date>(pUpdatedAt);
-    dirtyFlag_[17] = true;
+    dirtyFlag_[15] = true;
 }
 void WssdRegistry::setUpdatedAtToNull() noexcept
 {
     updatedAt_.reset();
-    dirtyFlag_[17] = true;
+    dirtyFlag_[15] = true;
 }
 
 void WssdRegistry::updateId(const uint64_t id)
@@ -1600,10 +1480,8 @@ const std::vector<std::string> &WssdRegistry::insertColumns() noexcept
         "description",
         "activated_on",
         "logo_url",
-        "is_wssd_active",
-        "is_ussd_active",
-        "use_as_secondary_service",
         "tenant_id",
+        "service_type",
         "rank",
         "merchant_identifier",
         "category",
@@ -1696,39 +1574,6 @@ void WssdRegistry::outputArgs(drogon::orm::internal::SqlBinder &binder) const
     }
     if(dirtyFlag_[7])
     {
-        if(getIsWssdActive())
-        {
-            binder << getValueOfIsWssdActive();
-        }
-        else
-        {
-            binder << nullptr;
-        }
-    }
-    if(dirtyFlag_[8])
-    {
-        if(getIsUssdActive())
-        {
-            binder << getValueOfIsUssdActive();
-        }
-        else
-        {
-            binder << nullptr;
-        }
-    }
-    if(dirtyFlag_[9])
-    {
-        if(getUseAsSecondaryService())
-        {
-            binder << getValueOfUseAsSecondaryService();
-        }
-        else
-        {
-            binder << nullptr;
-        }
-    }
-    if(dirtyFlag_[10])
-    {
         if(getTenantId())
         {
             binder << getValueOfTenantId();
@@ -1738,7 +1583,18 @@ void WssdRegistry::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[11])
+    if(dirtyFlag_[8])
+    {
+        if(getServiceType())
+        {
+            binder << getValueOfServiceType();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+    if(dirtyFlag_[9])
     {
         if(getRank())
         {
@@ -1749,7 +1605,7 @@ void WssdRegistry::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[12])
+    if(dirtyFlag_[10])
     {
         if(getMerchantIdentifier())
         {
@@ -1760,7 +1616,7 @@ void WssdRegistry::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[13])
+    if(dirtyFlag_[11])
     {
         if(getCategory())
         {
@@ -1771,7 +1627,7 @@ void WssdRegistry::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[14])
+    if(dirtyFlag_[12])
     {
         if(getBusinessName())
         {
@@ -1782,7 +1638,7 @@ void WssdRegistry::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[15])
+    if(dirtyFlag_[13])
     {
         if(getExecutable())
         {
@@ -1793,7 +1649,7 @@ void WssdRegistry::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[16])
+    if(dirtyFlag_[14])
     {
         if(getCreatedAt())
         {
@@ -1804,7 +1660,7 @@ void WssdRegistry::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[17])
+    if(dirtyFlag_[15])
     {
         if(getUpdatedAt())
         {
@@ -1883,14 +1739,6 @@ const std::vector<std::string> WssdRegistry::updateColumns() const
     if(dirtyFlag_[15])
     {
         ret.push_back(getColumnName(15));
-    }
-    if(dirtyFlag_[16])
-    {
-        ret.push_back(getColumnName(16));
-    }
-    if(dirtyFlag_[17])
-    {
-        ret.push_back(getColumnName(17));
     }
     return ret;
 }
@@ -1976,39 +1824,6 @@ void WssdRegistry::updateArgs(drogon::orm::internal::SqlBinder &binder) const
     }
     if(dirtyFlag_[7])
     {
-        if(getIsWssdActive())
-        {
-            binder << getValueOfIsWssdActive();
-        }
-        else
-        {
-            binder << nullptr;
-        }
-    }
-    if(dirtyFlag_[8])
-    {
-        if(getIsUssdActive())
-        {
-            binder << getValueOfIsUssdActive();
-        }
-        else
-        {
-            binder << nullptr;
-        }
-    }
-    if(dirtyFlag_[9])
-    {
-        if(getUseAsSecondaryService())
-        {
-            binder << getValueOfUseAsSecondaryService();
-        }
-        else
-        {
-            binder << nullptr;
-        }
-    }
-    if(dirtyFlag_[10])
-    {
         if(getTenantId())
         {
             binder << getValueOfTenantId();
@@ -2018,7 +1833,18 @@ void WssdRegistry::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[11])
+    if(dirtyFlag_[8])
+    {
+        if(getServiceType())
+        {
+            binder << getValueOfServiceType();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+    if(dirtyFlag_[9])
     {
         if(getRank())
         {
@@ -2029,7 +1855,7 @@ void WssdRegistry::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[12])
+    if(dirtyFlag_[10])
     {
         if(getMerchantIdentifier())
         {
@@ -2040,7 +1866,7 @@ void WssdRegistry::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[13])
+    if(dirtyFlag_[11])
     {
         if(getCategory())
         {
@@ -2051,7 +1877,7 @@ void WssdRegistry::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[14])
+    if(dirtyFlag_[12])
     {
         if(getBusinessName())
         {
@@ -2062,7 +1888,7 @@ void WssdRegistry::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[15])
+    if(dirtyFlag_[13])
     {
         if(getExecutable())
         {
@@ -2073,7 +1899,7 @@ void WssdRegistry::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[16])
+    if(dirtyFlag_[14])
     {
         if(getCreatedAt())
         {
@@ -2084,7 +1910,7 @@ void WssdRegistry::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[17])
+    if(dirtyFlag_[15])
     {
         if(getUpdatedAt())
         {
@@ -2155,30 +1981,6 @@ Json::Value WssdRegistry::toJson() const
     {
         ret["logo_url"]=Json::Value();
     }
-    if(getIsWssdActive())
-    {
-        ret["is_wssd_active"]=getValueOfIsWssdActive();
-    }
-    else
-    {
-        ret["is_wssd_active"]=Json::Value();
-    }
-    if(getIsUssdActive())
-    {
-        ret["is_ussd_active"]=getValueOfIsUssdActive();
-    }
-    else
-    {
-        ret["is_ussd_active"]=Json::Value();
-    }
-    if(getUseAsSecondaryService())
-    {
-        ret["use_as_secondary_service"]=getValueOfUseAsSecondaryService();
-    }
-    else
-    {
-        ret["use_as_secondary_service"]=Json::Value();
-    }
     if(getTenantId())
     {
         ret["tenant_id"]=getValueOfTenantId();
@@ -2186,6 +1988,14 @@ Json::Value WssdRegistry::toJson() const
     else
     {
         ret["tenant_id"]=Json::Value();
+    }
+    if(getServiceType())
+    {
+        ret["service_type"]=getValueOfServiceType();
+    }
+    else
+    {
+        ret["service_type"]=Json::Value();
     }
     if(getRank())
     {
@@ -2255,7 +2065,7 @@ Json::Value WssdRegistry::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 18)
+    if(pMasqueradingVector.size() == 16)
     {
         if(!pMasqueradingVector[0].empty())
         {
@@ -2336,9 +2146,9 @@ Json::Value WssdRegistry::toMasqueradedJson(
         }
         if(!pMasqueradingVector[7].empty())
         {
-            if(getIsWssdActive())
+            if(getTenantId())
             {
-                ret[pMasqueradingVector[7]]=getValueOfIsWssdActive();
+                ret[pMasqueradingVector[7]]=getValueOfTenantId();
             }
             else
             {
@@ -2347,9 +2157,9 @@ Json::Value WssdRegistry::toMasqueradedJson(
         }
         if(!pMasqueradingVector[8].empty())
         {
-            if(getIsUssdActive())
+            if(getServiceType())
             {
-                ret[pMasqueradingVector[8]]=getValueOfIsUssdActive();
+                ret[pMasqueradingVector[8]]=getValueOfServiceType();
             }
             else
             {
@@ -2358,9 +2168,9 @@ Json::Value WssdRegistry::toMasqueradedJson(
         }
         if(!pMasqueradingVector[9].empty())
         {
-            if(getUseAsSecondaryService())
+            if(getRank())
             {
-                ret[pMasqueradingVector[9]]=getValueOfUseAsSecondaryService();
+                ret[pMasqueradingVector[9]]=getValueOfRank();
             }
             else
             {
@@ -2369,9 +2179,9 @@ Json::Value WssdRegistry::toMasqueradedJson(
         }
         if(!pMasqueradingVector[10].empty())
         {
-            if(getTenantId())
+            if(getMerchantIdentifier())
             {
-                ret[pMasqueradingVector[10]]=getValueOfTenantId();
+                ret[pMasqueradingVector[10]]=getValueOfMerchantIdentifier();
             }
             else
             {
@@ -2380,9 +2190,9 @@ Json::Value WssdRegistry::toMasqueradedJson(
         }
         if(!pMasqueradingVector[11].empty())
         {
-            if(getRank())
+            if(getCategory())
             {
-                ret[pMasqueradingVector[11]]=getValueOfRank();
+                ret[pMasqueradingVector[11]]=getValueOfCategory();
             }
             else
             {
@@ -2391,9 +2201,9 @@ Json::Value WssdRegistry::toMasqueradedJson(
         }
         if(!pMasqueradingVector[12].empty())
         {
-            if(getMerchantIdentifier())
+            if(getBusinessName())
             {
-                ret[pMasqueradingVector[12]]=getValueOfMerchantIdentifier();
+                ret[pMasqueradingVector[12]]=getValueOfBusinessName();
             }
             else
             {
@@ -2402,9 +2212,9 @@ Json::Value WssdRegistry::toMasqueradedJson(
         }
         if(!pMasqueradingVector[13].empty())
         {
-            if(getCategory())
+            if(getExecutable())
             {
-                ret[pMasqueradingVector[13]]=getValueOfCategory();
+                ret[pMasqueradingVector[13]]=getValueOfExecutable();
             }
             else
             {
@@ -2413,9 +2223,9 @@ Json::Value WssdRegistry::toMasqueradedJson(
         }
         if(!pMasqueradingVector[14].empty())
         {
-            if(getBusinessName())
+            if(getCreatedAt())
             {
-                ret[pMasqueradingVector[14]]=getValueOfBusinessName();
+                ret[pMasqueradingVector[14]]=getCreatedAt()->toDbStringLocal();
             }
             else
             {
@@ -2424,35 +2234,13 @@ Json::Value WssdRegistry::toMasqueradedJson(
         }
         if(!pMasqueradingVector[15].empty())
         {
-            if(getExecutable())
+            if(getUpdatedAt())
             {
-                ret[pMasqueradingVector[15]]=getValueOfExecutable();
+                ret[pMasqueradingVector[15]]=getUpdatedAt()->toDbStringLocal();
             }
             else
             {
                 ret[pMasqueradingVector[15]]=Json::Value();
-            }
-        }
-        if(!pMasqueradingVector[16].empty())
-        {
-            if(getCreatedAt())
-            {
-                ret[pMasqueradingVector[16]]=getCreatedAt()->toDbStringLocal();
-            }
-            else
-            {
-                ret[pMasqueradingVector[16]]=Json::Value();
-            }
-        }
-        if(!pMasqueradingVector[17].empty())
-        {
-            if(getUpdatedAt())
-            {
-                ret[pMasqueradingVector[17]]=getUpdatedAt()->toDbStringLocal();
-            }
-            else
-            {
-                ret[pMasqueradingVector[17]]=Json::Value();
             }
         }
         return ret;
@@ -2514,30 +2302,6 @@ Json::Value WssdRegistry::toMasqueradedJson(
     {
         ret["logo_url"]=Json::Value();
     }
-    if(getIsWssdActive())
-    {
-        ret["is_wssd_active"]=getValueOfIsWssdActive();
-    }
-    else
-    {
-        ret["is_wssd_active"]=Json::Value();
-    }
-    if(getIsUssdActive())
-    {
-        ret["is_ussd_active"]=getValueOfIsUssdActive();
-    }
-    else
-    {
-        ret["is_ussd_active"]=Json::Value();
-    }
-    if(getUseAsSecondaryService())
-    {
-        ret["use_as_secondary_service"]=getValueOfUseAsSecondaryService();
-    }
-    else
-    {
-        ret["use_as_secondary_service"]=Json::Value();
-    }
     if(getTenantId())
     {
         ret["tenant_id"]=getValueOfTenantId();
@@ -2545,6 +2309,14 @@ Json::Value WssdRegistry::toMasqueradedJson(
     else
     {
         ret["tenant_id"]=Json::Value();
+    }
+    if(getServiceType())
+    {
+        ret["service_type"]=getValueOfServiceType();
+    }
+    else
+    {
+        ret["service_type"]=Json::Value();
     }
     if(getRank())
     {
@@ -2642,24 +2414,9 @@ bool WssdRegistry::validateJsonForCreation(const Json::Value &pJson, std::string
         if(!validJsonOfField(6, "logo_url", pJson["logo_url"], err, true))
             return false;
     }
-    if(pJson.isMember("is_wssd_active"))
-    {
-        if(!validJsonOfField(7, "is_wssd_active", pJson["is_wssd_active"], err, true))
-            return false;
-    }
-    if(pJson.isMember("is_ussd_active"))
-    {
-        if(!validJsonOfField(8, "is_ussd_active", pJson["is_ussd_active"], err, true))
-            return false;
-    }
-    if(pJson.isMember("use_as_secondary_service"))
-    {
-        if(!validJsonOfField(9, "use_as_secondary_service", pJson["use_as_secondary_service"], err, true))
-            return false;
-    }
     if(pJson.isMember("tenant_id"))
     {
-        if(!validJsonOfField(10, "tenant_id", pJson["tenant_id"], err, true))
+        if(!validJsonOfField(7, "tenant_id", pJson["tenant_id"], err, true))
             return false;
     }
     else
@@ -2667,39 +2424,44 @@ bool WssdRegistry::validateJsonForCreation(const Json::Value &pJson, std::string
         err="The tenant_id column cannot be null";
         return false;
     }
+    if(pJson.isMember("service_type"))
+    {
+        if(!validJsonOfField(8, "service_type", pJson["service_type"], err, true))
+            return false;
+    }
     if(pJson.isMember("rank"))
     {
-        if(!validJsonOfField(11, "rank", pJson["rank"], err, true))
+        if(!validJsonOfField(9, "rank", pJson["rank"], err, true))
             return false;
     }
     if(pJson.isMember("merchant_identifier"))
     {
-        if(!validJsonOfField(12, "merchant_identifier", pJson["merchant_identifier"], err, true))
+        if(!validJsonOfField(10, "merchant_identifier", pJson["merchant_identifier"], err, true))
             return false;
     }
     if(pJson.isMember("category"))
     {
-        if(!validJsonOfField(13, "category", pJson["category"], err, true))
+        if(!validJsonOfField(11, "category", pJson["category"], err, true))
             return false;
     }
     if(pJson.isMember("business_name"))
     {
-        if(!validJsonOfField(14, "business_name", pJson["business_name"], err, true))
+        if(!validJsonOfField(12, "business_name", pJson["business_name"], err, true))
             return false;
     }
     if(pJson.isMember("executable"))
     {
-        if(!validJsonOfField(15, "executable", pJson["executable"], err, true))
+        if(!validJsonOfField(13, "executable", pJson["executable"], err, true))
             return false;
     }
     if(pJson.isMember("created_at"))
     {
-        if(!validJsonOfField(16, "created_at", pJson["created_at"], err, true))
+        if(!validJsonOfField(14, "created_at", pJson["created_at"], err, true))
             return false;
     }
     if(pJson.isMember("updated_at"))
     {
-        if(!validJsonOfField(17, "updated_at", pJson["updated_at"], err, true))
+        if(!validJsonOfField(15, "updated_at", pJson["updated_at"], err, true))
             return false;
     }
     return true;
@@ -2708,7 +2470,7 @@ bool WssdRegistry::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                       const std::vector<std::string> &pMasqueradingVector,
                                                       std::string &err)
 {
-    if(pMasqueradingVector.size() != 18)
+    if(pMasqueradingVector.size() != 16)
     {
         err = "Bad masquerading vector";
         return false;
@@ -2777,6 +2539,11 @@ bool WssdRegistry::validateMasqueradedJsonForCreation(const Json::Value &pJson,
               if(!validJsonOfField(7, pMasqueradingVector[7], pJson[pMasqueradingVector[7]], err, true))
                   return false;
           }
+        else
+        {
+            err="The " + pMasqueradingVector[7] + " column cannot be null";
+            return false;
+        }
       }
       if(!pMasqueradingVector[8].empty())
       {
@@ -2801,11 +2568,6 @@ bool WssdRegistry::validateMasqueradedJsonForCreation(const Json::Value &pJson,
               if(!validJsonOfField(10, pMasqueradingVector[10], pJson[pMasqueradingVector[10]], err, true))
                   return false;
           }
-        else
-        {
-            err="The " + pMasqueradingVector[10] + " column cannot be null";
-            return false;
-        }
       }
       if(!pMasqueradingVector[11].empty())
       {
@@ -2844,22 +2606,6 @@ bool WssdRegistry::validateMasqueradedJsonForCreation(const Json::Value &pJson,
           if(pJson.isMember(pMasqueradingVector[15]))
           {
               if(!validJsonOfField(15, pMasqueradingVector[15], pJson[pMasqueradingVector[15]], err, true))
-                  return false;
-          }
-      }
-      if(!pMasqueradingVector[16].empty())
-      {
-          if(pJson.isMember(pMasqueradingVector[16]))
-          {
-              if(!validJsonOfField(16, pMasqueradingVector[16], pJson[pMasqueradingVector[16]], err, true))
-                  return false;
-          }
-      }
-      if(!pMasqueradingVector[17].empty())
-      {
-          if(pJson.isMember(pMasqueradingVector[17]))
-          {
-              if(!validJsonOfField(17, pMasqueradingVector[17], pJson[pMasqueradingVector[17]], err, true))
                   return false;
           }
       }
@@ -2913,59 +2659,49 @@ bool WssdRegistry::validateJsonForUpdate(const Json::Value &pJson, std::string &
         if(!validJsonOfField(6, "logo_url", pJson["logo_url"], err, false))
             return false;
     }
-    if(pJson.isMember("is_wssd_active"))
-    {
-        if(!validJsonOfField(7, "is_wssd_active", pJson["is_wssd_active"], err, false))
-            return false;
-    }
-    if(pJson.isMember("is_ussd_active"))
-    {
-        if(!validJsonOfField(8, "is_ussd_active", pJson["is_ussd_active"], err, false))
-            return false;
-    }
-    if(pJson.isMember("use_as_secondary_service"))
-    {
-        if(!validJsonOfField(9, "use_as_secondary_service", pJson["use_as_secondary_service"], err, false))
-            return false;
-    }
     if(pJson.isMember("tenant_id"))
     {
-        if(!validJsonOfField(10, "tenant_id", pJson["tenant_id"], err, false))
+        if(!validJsonOfField(7, "tenant_id", pJson["tenant_id"], err, false))
+            return false;
+    }
+    if(pJson.isMember("service_type"))
+    {
+        if(!validJsonOfField(8, "service_type", pJson["service_type"], err, false))
             return false;
     }
     if(pJson.isMember("rank"))
     {
-        if(!validJsonOfField(11, "rank", pJson["rank"], err, false))
+        if(!validJsonOfField(9, "rank", pJson["rank"], err, false))
             return false;
     }
     if(pJson.isMember("merchant_identifier"))
     {
-        if(!validJsonOfField(12, "merchant_identifier", pJson["merchant_identifier"], err, false))
+        if(!validJsonOfField(10, "merchant_identifier", pJson["merchant_identifier"], err, false))
             return false;
     }
     if(pJson.isMember("category"))
     {
-        if(!validJsonOfField(13, "category", pJson["category"], err, false))
+        if(!validJsonOfField(11, "category", pJson["category"], err, false))
             return false;
     }
     if(pJson.isMember("business_name"))
     {
-        if(!validJsonOfField(14, "business_name", pJson["business_name"], err, false))
+        if(!validJsonOfField(12, "business_name", pJson["business_name"], err, false))
             return false;
     }
     if(pJson.isMember("executable"))
     {
-        if(!validJsonOfField(15, "executable", pJson["executable"], err, false))
+        if(!validJsonOfField(13, "executable", pJson["executable"], err, false))
             return false;
     }
     if(pJson.isMember("created_at"))
     {
-        if(!validJsonOfField(16, "created_at", pJson["created_at"], err, false))
+        if(!validJsonOfField(14, "created_at", pJson["created_at"], err, false))
             return false;
     }
     if(pJson.isMember("updated_at"))
     {
-        if(!validJsonOfField(17, "updated_at", pJson["updated_at"], err, false))
+        if(!validJsonOfField(15, "updated_at", pJson["updated_at"], err, false))
             return false;
     }
     return true;
@@ -2974,7 +2710,7 @@ bool WssdRegistry::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                                     const std::vector<std::string> &pMasqueradingVector,
                                                     std::string &err)
 {
-    if(pMasqueradingVector.size() != 18)
+    if(pMasqueradingVector.size() != 16)
     {
         err = "Bad masquerading vector";
         return false;
@@ -3063,16 +2799,6 @@ bool WssdRegistry::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
       if(!pMasqueradingVector[15].empty() && pJson.isMember(pMasqueradingVector[15]))
       {
           if(!validJsonOfField(15, pMasqueradingVector[15], pJson[pMasqueradingVector[15]], err, false))
-              return false;
-      }
-      if(!pMasqueradingVector[16].empty() && pJson.isMember(pMasqueradingVector[16]))
-      {
-          if(!validJsonOfField(16, pMasqueradingVector[16], pJson[pMasqueradingVector[16]], err, false))
-              return false;
-      }
-      if(!pMasqueradingVector[17].empty() && pJson.isMember(pMasqueradingVector[17]))
-      {
-          if(!validJsonOfField(17, pMasqueradingVector[17], pJson[pMasqueradingVector[17]], err, false))
               return false;
       }
     }
@@ -3215,7 +2941,7 @@ bool WssdRegistry::validJsonOfField(size_t index,
                 err="The " + fieldName + " column cannot be null";
                 return false;
             }
-            if(!pJson.isBool())
+            if(!pJson.isInt())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;
@@ -3227,7 +2953,7 @@ bool WssdRegistry::validJsonOfField(size_t index,
                 err="The " + fieldName + " column cannot be null";
                 return false;
             }
-            if(!pJson.isBool())
+            if(!pJson.isInt())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;
@@ -3239,37 +2965,13 @@ bool WssdRegistry::validJsonOfField(size_t index,
                 err="The " + fieldName + " column cannot be null";
                 return false;
             }
-            if(!pJson.isBool())
+            if(!pJson.isInt())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;
             }
             break;
         case 10:
-            if(pJson.isNull())
-            {
-                err="The " + fieldName + " column cannot be null";
-                return false;
-            }
-            if(!pJson.isInt())
-            {
-                err="Type error in the "+fieldName+" field";
-                return false;
-            }
-            break;
-        case 11:
-            if(pJson.isNull())
-            {
-                err="The " + fieldName + " column cannot be null";
-                return false;
-            }
-            if(!pJson.isInt())
-            {
-                err="Type error in the "+fieldName+" field";
-                return false;
-            }
-            break;
-        case 12:
             if(pJson.isNull())
             {
                 return true;
@@ -3288,7 +2990,7 @@ bool WssdRegistry::validJsonOfField(size_t index,
                 return false;
             }
             break;
-        case 13:
+        case 11:
             if(pJson.isNull())
             {
                 return true;
@@ -3307,7 +3009,7 @@ bool WssdRegistry::validJsonOfField(size_t index,
                 return false;
             }
             break;
-        case 14:
+        case 12:
             if(pJson.isNull())
             {
                 return true;
@@ -3326,29 +3028,29 @@ bool WssdRegistry::validJsonOfField(size_t index,
                 return false;
             }
             break;
+        case 13:
+            if(pJson.isNull())
+            {
+                return true;
+            }
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            break;
+        case 14:
+            if(pJson.isNull())
+            {
+                return true;
+            }
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            break;
         case 15:
-            if(pJson.isNull())
-            {
-                return true;
-            }
-            if(!pJson.isString())
-            {
-                err="Type error in the "+fieldName+" field";
-                return false;
-            }
-            break;
-        case 16:
-            if(pJson.isNull())
-            {
-                return true;
-            }
-            if(!pJson.isString())
-            {
-                err="Type error in the "+fieldName+" field";
-                return false;
-            }
-            break;
-        case 17:
             if(pJson.isNull())
             {
                 return true;

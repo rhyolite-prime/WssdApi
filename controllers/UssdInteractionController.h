@@ -1,9 +1,14 @@
 #pragma once
 
 #include <drogon/HttpController.h>
+#include <drogon/utils/coroutine.h>
 
 using namespace drogon;
 
+/// USSD aggregator webhooks. Each provider keeps its own wire model (see
+/// dto/UssdSessionRequestDto.h / dto/UssdSessionResponse.h); the handlers
+/// below stay thin: validate -> normalize -> one Sapo turn -> render.
+/// All engine work happens in UssdSessionOrchestrator (off the IO threads).
 class UssdInteractionController : public drogon::HttpController<UssdInteractionController>
 {
   public:
