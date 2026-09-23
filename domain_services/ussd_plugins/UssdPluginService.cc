@@ -72,57 +72,6 @@ namespace wssd_api::domain_services {
         co_return response;
     }
 
-    drogon::Task<dto::BaseApiResponse> UssdPluginService::getAll(const std::string &businessId, int pageNo, int pageSize, const std::string &query) {
-        dto::BaseApiResponse response;
-        try {
-            auto dbClient = drogon::app().getDbClient();
-            CoroMapper<UssdPlugins> mapper(dbClient);
-
-            Criteria searchCriteria(UssdPlugins::Cols::_business_id, CompareOperator::EQ, businessId);
-
-            if (!query.empty()) {
-                std::string likeQuery = "%" + query + "%";
-                Criteria textCriteria = Criteria(UssdPlugins::Cols::_name, CompareOperator::Like, likeQuery) ||
-                                        Criteria(UssdPlugins::Cols::_description, CompareOperator::Like, likeQuery) ||
-                                        Criteria(UssdPlugins::Cols::_category, CompareOperator::Like, likeQuery);
-                searchCriteria = searchCriteria && textCriteria;
-            }
-
-            size_t offset = (pageNo > 0) ? (pageNo - 1) * pageSize : 0;
-            auto items = co_await mapper.offset(offset).limit(pageSize).findBy(searchCriteria);
-            
-            Json::Value jsonArray(Json::arrayValue);
-            for (const auto &item : items) {
-                Json::Value modelJson = item.toJson();
-                Json::Value jsonItem;
-                jsonItem["id"] = modelJson["id"];
-                jsonItem["name"] = modelJson["name"];
-                jsonItem["description"] = modelJson["description"];
-                jsonItem["category"] = modelJson["category"];
-                jsonItem["defaultConfig"] = modelJson["default_config"];
-                jsonItem["spec"] = modelJson["spec"];
-                jsonItem["isActive"] = modelJson["is_active"];
-                jsonItem["isBuiltIn"] = modelJson["is_built_in"];
-                jsonItem["isPreinstalled"] = modelJson["is_preinstalled"];
-                jsonItem["businessId"] = modelJson["business_id"];
-                jsonItem["version"] = modelJson["version"];
-                jsonItem["createdAt"] = modelJson["created_at"];
-                jsonItem["updatedAt"] = modelJson["updated_at"];
-                jsonArray.append(jsonItem);
-            }
-            
-            response.success = true;
-            response.message = "Fetched successfully";
-            response.result = jsonArray;
-        } catch (const DrogonDbException &e) {
-            response.success = false;
-            response.message = std::string("Database error: ") + e.base().what();
-        } catch (const std::exception &e) {
-            response.success = false;
-            response.message = std::string("Error: ") + e.what();
-        }
-        co_return response;
-    }
 
     drogon::Task<dto::BaseApiResponse> UssdPluginService::create(const dto::PluginDto &dto) {
         dto::BaseApiResponse response;
@@ -142,7 +91,6 @@ namespace wssd_api::domain_services {
             model.setIsBuiltIn(dto.getIsBuiltIn());
             model.setIsPreinstalled(dto.getIsPreinstalled());
 
-            if (!dto.getBusinessId().empty()) model.setBusinessId(dto.getBusinessId());
             if (!dto.getVersion().empty()) model.setVersion(dto.getVersion());
 
             auto result = co_await mapper.insert(model);
@@ -228,7 +176,6 @@ namespace wssd_api::domain_services {
 
             auto existingModel = co_await mapper.findByPrimaryKey(id);
             
-            existingModel.setBusinessId(businessId);
             existingModel.setIsActive(true);
 
             auto result = co_await mapper.update(existingModel);

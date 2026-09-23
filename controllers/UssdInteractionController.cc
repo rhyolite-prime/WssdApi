@@ -1,11 +1,17 @@
 #include "UssdInteractionController.h"
+
+#include "dto/UssdSessionRequestDto.h"
+#include "dto/UssdSessionResponse.h"
 #include "plugins/WssdServicePlugin.h"
 
 
 Task<HttpResponsePtr> UssdInteractionController::handleNaloUssdInteraction(HttpRequestPtr req) {
 
+    wssd_api::dto::NaloUssdSessionResponse naloUssdSessionResponse;
+
     auto jsonBody = req->getJsonObject();
     if (!jsonBody) {
+
         wssd_api::dto::BaseApiResponse response;
         response.success = false;
         response.error["message"] = "Invalid JSON body";
@@ -17,12 +23,7 @@ Task<HttpResponsePtr> UssdInteractionController::handleNaloUssdInteraction(HttpR
     wssd_api::dto::NaloUssdSessionRequestDto dto;
     dto.fromJson(*jsonBody);
 
-    auto plugin = app().getPlugin<WssdServicePlugin>();
-    auto &ussdSessionService = plugin->getUssdSessionService();
-
-    auto result = co_await ussdSessionService.handleNaloUssdSessionInteraction(dto);
-
-    auto resp = HttpResponse::newHttpJsonResponse(result.toJson());
+    auto resp = HttpResponse::newHttpJsonResponse(naloUssdSessionResponse.toJson());
     resp->setStatusCode(k200OK);
     co_return resp;
 
@@ -30,6 +31,8 @@ Task<HttpResponsePtr> UssdInteractionController::handleNaloUssdInteraction(HttpR
 
 
 Task<HttpResponsePtr> UssdInteractionController::handleHubtelUssdInteraction(HttpRequestPtr req) {
+
+    wssd_api::dto::HubtelUssdSessionResponse hubtelUssdSessionResponse;
 
     auto jsonBody = req->getJsonObject();
     if (!jsonBody) {
@@ -44,11 +47,8 @@ Task<HttpResponsePtr> UssdInteractionController::handleHubtelUssdInteraction(Htt
     wssd_api::dto::HubtelUssdSessionRequestDto dto;
     dto.fromJson(*jsonBody);
 
-    auto plugin = app().getPlugin<WssdServicePlugin>();
-    auto &ussdSessionService = plugin->getUssdSessionService();
 
-    auto result = co_await ussdSessionService.handleHubtelUssdSessionInteraction(dto);
-    auto resp = HttpResponse::newHttpJsonResponse(result.toJson());
+    auto resp = HttpResponse::newHttpJsonResponse(hubtelUssdSessionResponse.toJson());
     resp->setStatusCode(k200OK);
     co_return resp;
 

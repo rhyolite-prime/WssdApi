@@ -1,7 +1,7 @@
 //
 // Created by Emmanuel Addo-Odame on 05/07/2026.
 //
-#include "WssdRegistryServce.h"
+#include "WssdRegistryService.h"
 #include "WssdRegistry.h"
 #include <drogon/drogon.h>
 #include <drogon/orm/CoroMapper.h>

@@ -15,4 +15,5 @@ class UssdInteractionController : public drogon::HttpController<UssdInteractionC
 
     Task<HttpResponsePtr> handleNaloUssdInteraction(HttpRequestPtr req);
     Task<HttpResponsePtr> handleHubtelUssdInteraction(HttpRequestPtr req);
+
 };

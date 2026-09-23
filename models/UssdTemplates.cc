@@ -18,6 +18,7 @@ const std::string UssdTemplates::Cols::_name = "\"name\"";
 const std::string UssdTemplates::Cols::_description = "\"description\"";
 const std::string UssdTemplates::Cols::_language_code = "\"language_code\"";
 const std::string UssdTemplates::Cols::_category = "\"category\"";
+const std::string UssdTemplates::Cols::_author = "\"author\"";
 const std::string UssdTemplates::Cols::_default_config = "\"default_config\"";
 const std::string UssdTemplates::Cols::_spec = "\"spec\"";
 const std::string UssdTemplates::Cols::_is_active = "\"is_active\"";
@@ -33,6 +34,7 @@ const std::vector<typename UssdTemplates::MetaData> UssdTemplates::metaData_={
 {"description","std::string","text",0,0,0,0},
 {"language_code","std::string","character varying",10,0,0,0},
 {"category","std::string","character varying",50,0,0,1},
+{"author","std::string","character varying",150,0,0,1},
 {"default_config","std::string","jsonb",0,0,0,0},
 {"spec","std::string","jsonb",0,0,0,0},
 {"is_active","bool","boolean",1,0,0,0},
@@ -67,6 +69,10 @@ UssdTemplates::UssdTemplates(const Row &r, const ssize_t indexOffset) noexcept
         if(!r["category"].isNull())
         {
             category_=std::make_shared<std::string>(r["category"].as<std::string>());
+        }
+        if(!r["author"].isNull())
+        {
+            author_=std::make_shared<std::string>(r["author"].as<std::string>());
         }
         if(!r["default_config"].isNull())
         {
@@ -128,7 +134,7 @@ UssdTemplates::UssdTemplates(const Row &r, const ssize_t indexOffset) noexcept
     else
     {
         size_t offset = (size_t)indexOffset;
-        if(offset + 10 > r.size())
+        if(offset + 11 > r.size())
         {
             LOG_FATAL << "Invalid SQL result for this model";
             return;
@@ -162,19 +168,24 @@ UssdTemplates::UssdTemplates(const Row &r, const ssize_t indexOffset) noexcept
         index = offset + 5;
         if(!r[index].isNull())
         {
-            defaultConfig_=std::make_shared<std::string>(r[index].as<std::string>());
+            author_=std::make_shared<std::string>(r[index].as<std::string>());
         }
         index = offset + 6;
         if(!r[index].isNull())
         {
-            spec_=std::make_shared<std::string>(r[index].as<std::string>());
+            defaultConfig_=std::make_shared<std::string>(r[index].as<std::string>());
         }
         index = offset + 7;
         if(!r[index].isNull())
         {
-            isActive_=std::make_shared<bool>(r[index].as<bool>());
+            spec_=std::make_shared<std::string>(r[index].as<std::string>());
         }
         index = offset + 8;
+        if(!r[index].isNull())
+        {
+            isActive_=std::make_shared<bool>(r[index].as<bool>());
+        }
+        index = offset + 9;
         if(!r[index].isNull())
         {
             auto timeStr = r[index].as<std::string>();
@@ -197,7 +208,7 @@ UssdTemplates::UssdTemplates(const Row &r, const ssize_t indexOffset) noexcept
                 createdAt_=std::make_shared<::trantor::Date>(t*1000000+decimalNum);
             }
         }
-        index = offset + 9;
+        index = offset + 10;
         if(!r[index].isNull())
         {
             auto timeStr = r[index].as<std::string>();
@@ -226,7 +237,7 @@ UssdTemplates::UssdTemplates(const Row &r, const ssize_t indexOffset) noexcept
 
 UssdTemplates::UssdTemplates(const Json::Value &pJson, const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 10)
+    if(pMasqueradingVector.size() != 11)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -276,7 +287,7 @@ UssdTemplates::UssdTemplates(const Json::Value &pJson, const std::vector<std::st
         dirtyFlag_[5] = true;
         if(!pJson[pMasqueradingVector[5]].isNull())
         {
-            defaultConfig_=std::make_shared<std::string>(pJson[pMasqueradingVector[5]].asString());
+            author_=std::make_shared<std::string>(pJson[pMasqueradingVector[5]].asString());
         }
     }
     if(!pMasqueradingVector[6].empty() && pJson.isMember(pMasqueradingVector[6]))
@@ -284,7 +295,7 @@ UssdTemplates::UssdTemplates(const Json::Value &pJson, const std::vector<std::st
         dirtyFlag_[6] = true;
         if(!pJson[pMasqueradingVector[6]].isNull())
         {
-            spec_=std::make_shared<std::string>(pJson[pMasqueradingVector[6]].asString());
+            defaultConfig_=std::make_shared<std::string>(pJson[pMasqueradingVector[6]].asString());
         }
     }
     if(!pMasqueradingVector[7].empty() && pJson.isMember(pMasqueradingVector[7]))
@@ -292,7 +303,7 @@ UssdTemplates::UssdTemplates(const Json::Value &pJson, const std::vector<std::st
         dirtyFlag_[7] = true;
         if(!pJson[pMasqueradingVector[7]].isNull())
         {
-            isActive_=std::make_shared<bool>(pJson[pMasqueradingVector[7]].asBool());
+            spec_=std::make_shared<std::string>(pJson[pMasqueradingVector[7]].asString());
         }
     }
     if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
@@ -300,7 +311,15 @@ UssdTemplates::UssdTemplates(const Json::Value &pJson, const std::vector<std::st
         dirtyFlag_[8] = true;
         if(!pJson[pMasqueradingVector[8]].isNull())
         {
-            auto timeStr = pJson[pMasqueradingVector[8]].asString();
+            isActive_=std::make_shared<bool>(pJson[pMasqueradingVector[8]].asBool());
+        }
+    }
+    if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
+    {
+        dirtyFlag_[9] = true;
+        if(!pJson[pMasqueradingVector[9]].isNull())
+        {
+            auto timeStr = pJson[pMasqueradingVector[9]].asString();
             struct tm stm;
             memset(&stm,0,sizeof(stm));
             auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
@@ -321,12 +340,12 @@ UssdTemplates::UssdTemplates(const Json::Value &pJson, const std::vector<std::st
             }
         }
     }
-    if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
+    if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
     {
-        dirtyFlag_[9] = true;
-        if(!pJson[pMasqueradingVector[9]].isNull())
+        dirtyFlag_[10] = true;
+        if(!pJson[pMasqueradingVector[10]].isNull())
         {
-            auto timeStr = pJson[pMasqueradingVector[9]].asString();
+            auto timeStr = pJson[pMasqueradingVector[10]].asString();
             struct tm stm;
             memset(&stm,0,sizeof(stm));
             auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
@@ -391,9 +410,17 @@ UssdTemplates::UssdTemplates(const Json::Value &pJson) noexcept(false)
             category_=std::make_shared<std::string>(pJson["category"].asString());
         }
     }
-    if(pJson.isMember("default_config"))
+    if(pJson.isMember("author"))
     {
         dirtyFlag_[5]=true;
+        if(!pJson["author"].isNull())
+        {
+            author_=std::make_shared<std::string>(pJson["author"].asString());
+        }
+    }
+    if(pJson.isMember("default_config"))
+    {
+        dirtyFlag_[6]=true;
         if(!pJson["default_config"].isNull())
         {
             defaultConfig_=std::make_shared<std::string>(pJson["default_config"].asString());
@@ -401,7 +428,7 @@ UssdTemplates::UssdTemplates(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("spec"))
     {
-        dirtyFlag_[6]=true;
+        dirtyFlag_[7]=true;
         if(!pJson["spec"].isNull())
         {
             spec_=std::make_shared<std::string>(pJson["spec"].asString());
@@ -409,7 +436,7 @@ UssdTemplates::UssdTemplates(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("is_active"))
     {
-        dirtyFlag_[7]=true;
+        dirtyFlag_[8]=true;
         if(!pJson["is_active"].isNull())
         {
             isActive_=std::make_shared<bool>(pJson["is_active"].asBool());
@@ -417,7 +444,7 @@ UssdTemplates::UssdTemplates(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("created_at"))
     {
-        dirtyFlag_[8]=true;
+        dirtyFlag_[9]=true;
         if(!pJson["created_at"].isNull())
         {
             auto timeStr = pJson["created_at"].asString();
@@ -443,7 +470,7 @@ UssdTemplates::UssdTemplates(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("updated_at"))
     {
-        dirtyFlag_[9]=true;
+        dirtyFlag_[10]=true;
         if(!pJson["updated_at"].isNull())
         {
             auto timeStr = pJson["updated_at"].asString();
@@ -472,7 +499,7 @@ UssdTemplates::UssdTemplates(const Json::Value &pJson) noexcept(false)
 void UssdTemplates::updateByMasqueradedJson(const Json::Value &pJson,
                                             const std::vector<std::string> &pMasqueradingVector) noexcept(false)
 {
-    if(pMasqueradingVector.size() != 10)
+    if(pMasqueradingVector.size() != 11)
     {
         LOG_ERROR << "Bad masquerading vector";
         return;
@@ -521,7 +548,7 @@ void UssdTemplates::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[5] = true;
         if(!pJson[pMasqueradingVector[5]].isNull())
         {
-            defaultConfig_=std::make_shared<std::string>(pJson[pMasqueradingVector[5]].asString());
+            author_=std::make_shared<std::string>(pJson[pMasqueradingVector[5]].asString());
         }
     }
     if(!pMasqueradingVector[6].empty() && pJson.isMember(pMasqueradingVector[6]))
@@ -529,7 +556,7 @@ void UssdTemplates::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[6] = true;
         if(!pJson[pMasqueradingVector[6]].isNull())
         {
-            spec_=std::make_shared<std::string>(pJson[pMasqueradingVector[6]].asString());
+            defaultConfig_=std::make_shared<std::string>(pJson[pMasqueradingVector[6]].asString());
         }
     }
     if(!pMasqueradingVector[7].empty() && pJson.isMember(pMasqueradingVector[7]))
@@ -537,7 +564,7 @@ void UssdTemplates::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[7] = true;
         if(!pJson[pMasqueradingVector[7]].isNull())
         {
-            isActive_=std::make_shared<bool>(pJson[pMasqueradingVector[7]].asBool());
+            spec_=std::make_shared<std::string>(pJson[pMasqueradingVector[7]].asString());
         }
     }
     if(!pMasqueradingVector[8].empty() && pJson.isMember(pMasqueradingVector[8]))
@@ -545,7 +572,15 @@ void UssdTemplates::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[8] = true;
         if(!pJson[pMasqueradingVector[8]].isNull())
         {
-            auto timeStr = pJson[pMasqueradingVector[8]].asString();
+            isActive_=std::make_shared<bool>(pJson[pMasqueradingVector[8]].asBool());
+        }
+    }
+    if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
+    {
+        dirtyFlag_[9] = true;
+        if(!pJson[pMasqueradingVector[9]].isNull())
+        {
+            auto timeStr = pJson[pMasqueradingVector[9]].asString();
             struct tm stm;
             memset(&stm,0,sizeof(stm));
             auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
@@ -566,12 +601,12 @@ void UssdTemplates::updateByMasqueradedJson(const Json::Value &pJson,
             }
         }
     }
-    if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
+    if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
     {
-        dirtyFlag_[9] = true;
-        if(!pJson[pMasqueradingVector[9]].isNull())
+        dirtyFlag_[10] = true;
+        if(!pJson[pMasqueradingVector[10]].isNull())
         {
-            auto timeStr = pJson[pMasqueradingVector[9]].asString();
+            auto timeStr = pJson[pMasqueradingVector[10]].asString();
             struct tm stm;
             memset(&stm,0,sizeof(stm));
             auto p = strptime(timeStr.c_str(),"%Y-%m-%d %H:%M:%S",&stm);
@@ -635,9 +670,17 @@ void UssdTemplates::updateByJson(const Json::Value &pJson) noexcept(false)
             category_=std::make_shared<std::string>(pJson["category"].asString());
         }
     }
-    if(pJson.isMember("default_config"))
+    if(pJson.isMember("author"))
     {
         dirtyFlag_[5] = true;
+        if(!pJson["author"].isNull())
+        {
+            author_=std::make_shared<std::string>(pJson["author"].asString());
+        }
+    }
+    if(pJson.isMember("default_config"))
+    {
+        dirtyFlag_[6] = true;
         if(!pJson["default_config"].isNull())
         {
             defaultConfig_=std::make_shared<std::string>(pJson["default_config"].asString());
@@ -645,7 +688,7 @@ void UssdTemplates::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("spec"))
     {
-        dirtyFlag_[6] = true;
+        dirtyFlag_[7] = true;
         if(!pJson["spec"].isNull())
         {
             spec_=std::make_shared<std::string>(pJson["spec"].asString());
@@ -653,7 +696,7 @@ void UssdTemplates::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("is_active"))
     {
-        dirtyFlag_[7] = true;
+        dirtyFlag_[8] = true;
         if(!pJson["is_active"].isNull())
         {
             isActive_=std::make_shared<bool>(pJson["is_active"].asBool());
@@ -661,7 +704,7 @@ void UssdTemplates::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("created_at"))
     {
-        dirtyFlag_[8] = true;
+        dirtyFlag_[9] = true;
         if(!pJson["created_at"].isNull())
         {
             auto timeStr = pJson["created_at"].asString();
@@ -687,7 +730,7 @@ void UssdTemplates::updateByJson(const Json::Value &pJson) noexcept(false)
     }
     if(pJson.isMember("updated_at"))
     {
-        dirtyFlag_[9] = true;
+        dirtyFlag_[10] = true;
         if(!pJson["updated_at"].isNull())
         {
             auto timeStr = pJson["updated_at"].asString();
@@ -838,6 +881,28 @@ void UssdTemplates::setCategory(std::string &&pCategory) noexcept
     dirtyFlag_[4] = true;
 }
 
+const std::string &UssdTemplates::getValueOfAuthor() const noexcept
+{
+    static const std::string defaultValue = std::string();
+    if(author_)
+        return *author_;
+    return defaultValue;
+}
+const std::shared_ptr<std::string> &UssdTemplates::getAuthor() const noexcept
+{
+    return author_;
+}
+void UssdTemplates::setAuthor(const std::string &pAuthor) noexcept
+{
+    author_ = std::make_shared<std::string>(pAuthor);
+    dirtyFlag_[5] = true;
+}
+void UssdTemplates::setAuthor(std::string &&pAuthor) noexcept
+{
+    author_ = std::make_shared<std::string>(std::move(pAuthor));
+    dirtyFlag_[5] = true;
+}
+
 const std::string &UssdTemplates::getValueOfDefaultConfig() const noexcept
 {
     static const std::string defaultValue = std::string();
@@ -852,17 +917,17 @@ const std::shared_ptr<std::string> &UssdTemplates::getDefaultConfig() const noex
 void UssdTemplates::setDefaultConfig(const std::string &pDefaultConfig) noexcept
 {
     defaultConfig_ = std::make_shared<std::string>(pDefaultConfig);
-    dirtyFlag_[5] = true;
+    dirtyFlag_[6] = true;
 }
 void UssdTemplates::setDefaultConfig(std::string &&pDefaultConfig) noexcept
 {
     defaultConfig_ = std::make_shared<std::string>(std::move(pDefaultConfig));
-    dirtyFlag_[5] = true;
+    dirtyFlag_[6] = true;
 }
 void UssdTemplates::setDefaultConfigToNull() noexcept
 {
     defaultConfig_.reset();
-    dirtyFlag_[5] = true;
+    dirtyFlag_[6] = true;
 }
 
 const std::string &UssdTemplates::getValueOfSpec() const noexcept
@@ -879,17 +944,17 @@ const std::shared_ptr<std::string> &UssdTemplates::getSpec() const noexcept
 void UssdTemplates::setSpec(const std::string &pSpec) noexcept
 {
     spec_ = std::make_shared<std::string>(pSpec);
-    dirtyFlag_[6] = true;
+    dirtyFlag_[7] = true;
 }
 void UssdTemplates::setSpec(std::string &&pSpec) noexcept
 {
     spec_ = std::make_shared<std::string>(std::move(pSpec));
-    dirtyFlag_[6] = true;
+    dirtyFlag_[7] = true;
 }
 void UssdTemplates::setSpecToNull() noexcept
 {
     spec_.reset();
-    dirtyFlag_[6] = true;
+    dirtyFlag_[7] = true;
 }
 
 const bool &UssdTemplates::getValueOfIsActive() const noexcept
@@ -906,12 +971,12 @@ const std::shared_ptr<bool> &UssdTemplates::getIsActive() const noexcept
 void UssdTemplates::setIsActive(const bool &pIsActive) noexcept
 {
     isActive_ = std::make_shared<bool>(pIsActive);
-    dirtyFlag_[7] = true;
+    dirtyFlag_[8] = true;
 }
 void UssdTemplates::setIsActiveToNull() noexcept
 {
     isActive_.reset();
-    dirtyFlag_[7] = true;
+    dirtyFlag_[8] = true;
 }
 
 const ::trantor::Date &UssdTemplates::getValueOfCreatedAt() const noexcept
@@ -928,12 +993,12 @@ const std::shared_ptr<::trantor::Date> &UssdTemplates::getCreatedAt() const noex
 void UssdTemplates::setCreatedAt(const ::trantor::Date &pCreatedAt) noexcept
 {
     createdAt_ = std::make_shared<::trantor::Date>(pCreatedAt);
-    dirtyFlag_[8] = true;
+    dirtyFlag_[9] = true;
 }
 void UssdTemplates::setCreatedAtToNull() noexcept
 {
     createdAt_.reset();
-    dirtyFlag_[8] = true;
+    dirtyFlag_[9] = true;
 }
 
 const ::trantor::Date &UssdTemplates::getValueOfUpdatedAt() const noexcept
@@ -950,12 +1015,12 @@ const std::shared_ptr<::trantor::Date> &UssdTemplates::getUpdatedAt() const noex
 void UssdTemplates::setUpdatedAt(const ::trantor::Date &pUpdatedAt) noexcept
 {
     updatedAt_ = std::make_shared<::trantor::Date>(pUpdatedAt);
-    dirtyFlag_[9] = true;
+    dirtyFlag_[10] = true;
 }
 void UssdTemplates::setUpdatedAtToNull() noexcept
 {
     updatedAt_.reset();
-    dirtyFlag_[9] = true;
+    dirtyFlag_[10] = true;
 }
 
 void UssdTemplates::updateId(const uint64_t id)
@@ -970,6 +1035,7 @@ const std::vector<std::string> &UssdTemplates::insertColumns() noexcept
         "description",
         "language_code",
         "category",
+        "author",
         "default_config",
         "spec",
         "is_active",
@@ -1038,6 +1104,17 @@ void UssdTemplates::outputArgs(drogon::orm::internal::SqlBinder &binder) const
     }
     if(dirtyFlag_[5])
     {
+        if(getAuthor())
+        {
+            binder << getValueOfAuthor();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+    if(dirtyFlag_[6])
+    {
         if(getDefaultConfig())
         {
             binder << getValueOfDefaultConfig();
@@ -1047,7 +1124,7 @@ void UssdTemplates::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[6])
+    if(dirtyFlag_[7])
     {
         if(getSpec())
         {
@@ -1058,7 +1135,7 @@ void UssdTemplates::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[7])
+    if(dirtyFlag_[8])
     {
         if(getIsActive())
         {
@@ -1069,7 +1146,7 @@ void UssdTemplates::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[8])
+    if(dirtyFlag_[9])
     {
         if(getCreatedAt())
         {
@@ -1080,7 +1157,7 @@ void UssdTemplates::outputArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[9])
+    if(dirtyFlag_[10])
     {
         if(getUpdatedAt())
         {
@@ -1135,6 +1212,10 @@ const std::vector<std::string> UssdTemplates::updateColumns() const
     if(dirtyFlag_[9])
     {
         ret.push_back(getColumnName(9));
+    }
+    if(dirtyFlag_[10])
+    {
+        ret.push_back(getColumnName(10));
     }
     return ret;
 }
@@ -1198,6 +1279,17 @@ void UssdTemplates::updateArgs(drogon::orm::internal::SqlBinder &binder) const
     }
     if(dirtyFlag_[5])
     {
+        if(getAuthor())
+        {
+            binder << getValueOfAuthor();
+        }
+        else
+        {
+            binder << nullptr;
+        }
+    }
+    if(dirtyFlag_[6])
+    {
         if(getDefaultConfig())
         {
             binder << getValueOfDefaultConfig();
@@ -1207,7 +1299,7 @@ void UssdTemplates::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[6])
+    if(dirtyFlag_[7])
     {
         if(getSpec())
         {
@@ -1218,7 +1310,7 @@ void UssdTemplates::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[7])
+    if(dirtyFlag_[8])
     {
         if(getIsActive())
         {
@@ -1229,7 +1321,7 @@ void UssdTemplates::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[8])
+    if(dirtyFlag_[9])
     {
         if(getCreatedAt())
         {
@@ -1240,7 +1332,7 @@ void UssdTemplates::updateArgs(drogon::orm::internal::SqlBinder &binder) const
             binder << nullptr;
         }
     }
-    if(dirtyFlag_[9])
+    if(dirtyFlag_[10])
     {
         if(getUpdatedAt())
         {
@@ -1295,6 +1387,14 @@ Json::Value UssdTemplates::toJson() const
     {
         ret["category"]=Json::Value();
     }
+    if(getAuthor())
+    {
+        ret["author"]=getValueOfAuthor();
+    }
+    else
+    {
+        ret["author"]=Json::Value();
+    }
     if(getDefaultConfig())
     {
         ret["default_config"]=getValueOfDefaultConfig();
@@ -1347,7 +1447,7 @@ Json::Value UssdTemplates::toMasqueradedJson(
     const std::vector<std::string> &pMasqueradingVector) const
 {
     Json::Value ret;
-    if(pMasqueradingVector.size() == 10)
+    if(pMasqueradingVector.size() == 11)
     {
         if(!pMasqueradingVector[0].empty())
         {
@@ -1406,9 +1506,9 @@ Json::Value UssdTemplates::toMasqueradedJson(
         }
         if(!pMasqueradingVector[5].empty())
         {
-            if(getDefaultConfig())
+            if(getAuthor())
             {
-                ret[pMasqueradingVector[5]]=getValueOfDefaultConfig();
+                ret[pMasqueradingVector[5]]=getValueOfAuthor();
             }
             else
             {
@@ -1417,9 +1517,9 @@ Json::Value UssdTemplates::toMasqueradedJson(
         }
         if(!pMasqueradingVector[6].empty())
         {
-            if(getSpec())
+            if(getDefaultConfig())
             {
-                ret[pMasqueradingVector[6]]=getValueOfSpec();
+                ret[pMasqueradingVector[6]]=getValueOfDefaultConfig();
             }
             else
             {
@@ -1428,9 +1528,9 @@ Json::Value UssdTemplates::toMasqueradedJson(
         }
         if(!pMasqueradingVector[7].empty())
         {
-            if(getIsActive())
+            if(getSpec())
             {
-                ret[pMasqueradingVector[7]]=getValueOfIsActive();
+                ret[pMasqueradingVector[7]]=getValueOfSpec();
             }
             else
             {
@@ -1439,9 +1539,9 @@ Json::Value UssdTemplates::toMasqueradedJson(
         }
         if(!pMasqueradingVector[8].empty())
         {
-            if(getCreatedAt())
+            if(getIsActive())
             {
-                ret[pMasqueradingVector[8]]=getCreatedAt()->toDbStringLocal();
+                ret[pMasqueradingVector[8]]=getValueOfIsActive();
             }
             else
             {
@@ -1450,13 +1550,24 @@ Json::Value UssdTemplates::toMasqueradedJson(
         }
         if(!pMasqueradingVector[9].empty())
         {
-            if(getUpdatedAt())
+            if(getCreatedAt())
             {
-                ret[pMasqueradingVector[9]]=getUpdatedAt()->toDbStringLocal();
+                ret[pMasqueradingVector[9]]=getCreatedAt()->toDbStringLocal();
             }
             else
             {
                 ret[pMasqueradingVector[9]]=Json::Value();
+            }
+        }
+        if(!pMasqueradingVector[10].empty())
+        {
+            if(getUpdatedAt())
+            {
+                ret[pMasqueradingVector[10]]=getUpdatedAt()->toDbStringLocal();
+            }
+            else
+            {
+                ret[pMasqueradingVector[10]]=Json::Value();
             }
         }
         return ret;
@@ -1501,6 +1612,14 @@ Json::Value UssdTemplates::toMasqueradedJson(
     else
     {
         ret["category"]=Json::Value();
+    }
+    if(getAuthor())
+    {
+        ret["author"]=getValueOfAuthor();
+    }
+    else
+    {
+        ret["author"]=Json::Value();
     }
     if(getDefaultConfig())
     {
@@ -1582,29 +1701,39 @@ bool UssdTemplates::validateJsonForCreation(const Json::Value &pJson, std::strin
         err="The category column cannot be null";
         return false;
     }
+    if(pJson.isMember("author"))
+    {
+        if(!validJsonOfField(5, "author", pJson["author"], err, true))
+            return false;
+    }
+    else
+    {
+        err="The author column cannot be null";
+        return false;
+    }
     if(pJson.isMember("default_config"))
     {
-        if(!validJsonOfField(5, "default_config", pJson["default_config"], err, true))
+        if(!validJsonOfField(6, "default_config", pJson["default_config"], err, true))
             return false;
     }
     if(pJson.isMember("spec"))
     {
-        if(!validJsonOfField(6, "spec", pJson["spec"], err, true))
+        if(!validJsonOfField(7, "spec", pJson["spec"], err, true))
             return false;
     }
     if(pJson.isMember("is_active"))
     {
-        if(!validJsonOfField(7, "is_active", pJson["is_active"], err, true))
+        if(!validJsonOfField(8, "is_active", pJson["is_active"], err, true))
             return false;
     }
     if(pJson.isMember("created_at"))
     {
-        if(!validJsonOfField(8, "created_at", pJson["created_at"], err, true))
+        if(!validJsonOfField(9, "created_at", pJson["created_at"], err, true))
             return false;
     }
     if(pJson.isMember("updated_at"))
     {
-        if(!validJsonOfField(9, "updated_at", pJson["updated_at"], err, true))
+        if(!validJsonOfField(10, "updated_at", pJson["updated_at"], err, true))
             return false;
     }
     return true;
@@ -1613,7 +1742,7 @@ bool UssdTemplates::validateMasqueradedJsonForCreation(const Json::Value &pJson,
                                                        const std::vector<std::string> &pMasqueradingVector,
                                                        std::string &err)
 {
-    if(pMasqueradingVector.size() != 10)
+    if(pMasqueradingVector.size() != 11)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1676,6 +1805,11 @@ bool UssdTemplates::validateMasqueradedJsonForCreation(const Json::Value &pJson,
               if(!validJsonOfField(5, pMasqueradingVector[5], pJson[pMasqueradingVector[5]], err, true))
                   return false;
           }
+        else
+        {
+            err="The " + pMasqueradingVector[5] + " column cannot be null";
+            return false;
+        }
       }
       if(!pMasqueradingVector[6].empty())
       {
@@ -1706,6 +1840,14 @@ bool UssdTemplates::validateMasqueradedJsonForCreation(const Json::Value &pJson,
           if(pJson.isMember(pMasqueradingVector[9]))
           {
               if(!validJsonOfField(9, pMasqueradingVector[9], pJson[pMasqueradingVector[9]], err, true))
+                  return false;
+          }
+      }
+      if(!pMasqueradingVector[10].empty())
+      {
+          if(pJson.isMember(pMasqueradingVector[10]))
+          {
+              if(!validJsonOfField(10, pMasqueradingVector[10], pJson[pMasqueradingVector[10]], err, true))
                   return false;
           }
       }
@@ -1749,29 +1891,34 @@ bool UssdTemplates::validateJsonForUpdate(const Json::Value &pJson, std::string 
         if(!validJsonOfField(4, "category", pJson["category"], err, false))
             return false;
     }
+    if(pJson.isMember("author"))
+    {
+        if(!validJsonOfField(5, "author", pJson["author"], err, false))
+            return false;
+    }
     if(pJson.isMember("default_config"))
     {
-        if(!validJsonOfField(5, "default_config", pJson["default_config"], err, false))
+        if(!validJsonOfField(6, "default_config", pJson["default_config"], err, false))
             return false;
     }
     if(pJson.isMember("spec"))
     {
-        if(!validJsonOfField(6, "spec", pJson["spec"], err, false))
+        if(!validJsonOfField(7, "spec", pJson["spec"], err, false))
             return false;
     }
     if(pJson.isMember("is_active"))
     {
-        if(!validJsonOfField(7, "is_active", pJson["is_active"], err, false))
+        if(!validJsonOfField(8, "is_active", pJson["is_active"], err, false))
             return false;
     }
     if(pJson.isMember("created_at"))
     {
-        if(!validJsonOfField(8, "created_at", pJson["created_at"], err, false))
+        if(!validJsonOfField(9, "created_at", pJson["created_at"], err, false))
             return false;
     }
     if(pJson.isMember("updated_at"))
     {
-        if(!validJsonOfField(9, "updated_at", pJson["updated_at"], err, false))
+        if(!validJsonOfField(10, "updated_at", pJson["updated_at"], err, false))
             return false;
     }
     return true;
@@ -1780,7 +1927,7 @@ bool UssdTemplates::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
                                                      const std::vector<std::string> &pMasqueradingVector,
                                                      std::string &err)
 {
-    if(pMasqueradingVector.size() != 10)
+    if(pMasqueradingVector.size() != 11)
     {
         err = "Bad masquerading vector";
         return false;
@@ -1839,6 +1986,11 @@ bool UssdTemplates::validateMasqueradedJsonForUpdate(const Json::Value &pJson,
       if(!pMasqueradingVector[9].empty() && pJson.isMember(pMasqueradingVector[9]))
       {
           if(!validJsonOfField(9, pMasqueradingVector[9], pJson[pMasqueradingVector[9]], err, false))
+              return false;
+      }
+      if(!pMasqueradingVector[10].empty() && pJson.isMember(pMasqueradingVector[10]))
+      {
+          if(!validJsonOfField(10, pMasqueradingVector[10], pJson[pMasqueradingVector[10]], err, false))
               return false;
       }
     }
@@ -1942,11 +2094,20 @@ bool UssdTemplates::validJsonOfField(size_t index,
         case 5:
             if(pJson.isNull())
             {
-                return true;
+                err="The " + fieldName + " column cannot be null";
+                return false;
             }
             if(!pJson.isString())
             {
                 err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            if(pJson.isString() && std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t>{}
+                .from_bytes(pJson.asCString()).size() > 150)
+            {
+                err="String length exceeds limit for the " +
+                    fieldName +
+                    " field (the maximum value is 150)";
                 return false;
             }
             break;
@@ -1966,7 +2127,7 @@ bool UssdTemplates::validJsonOfField(size_t index,
             {
                 return true;
             }
-            if(!pJson.isBool())
+            if(!pJson.isString())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;
@@ -1977,13 +2138,24 @@ bool UssdTemplates::validJsonOfField(size_t index,
             {
                 return true;
             }
-            if(!pJson.isString())
+            if(!pJson.isBool())
             {
                 err="Type error in the "+fieldName+" field";
                 return false;
             }
             break;
         case 9:
+            if(pJson.isNull())
+            {
+                return true;
+            }
+            if(!pJson.isString())
+            {
+                err="Type error in the "+fieldName+" field";
+                return false;
+            }
+            break;
+        case 10:
             if(pJson.isNull())
             {
                 return true;

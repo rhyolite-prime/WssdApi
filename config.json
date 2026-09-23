@@ -4,7 +4,7 @@
             //address: Ip address,0.0.0.0 by default
             "address": "0.0.0.0",
             //port: Port number
-            "port": 5109,
+            "port": 5107,
             //https: If true, use https for security,false by default
             "https": false
         }
@@ -321,6 +321,53 @@
     //custom_config: custom configuration for users. This object can be get by the app().getCustomConfig() method.
     "custom_config": {
 
+        "TurboLedger": {
+            "Ra": {
+                "ServiceName" : "Identity",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7500/api/v1/"
+            },
+            "Thoth": {
+                "ServiceName" : "accounting",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7501/api/v1/"
+            },
+            "Khepri": {
+                "ServiceName" : "heart-beat",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7502/api/v1/"
+            },
+            "Horus": {
+                "ServiceName" : "office",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7503/api/v1/"
+            },
+            "Maat": {
+                "ServiceName" : "customer",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7504/api/v1/"
+            },
+            "Shed": {
+                "ServiceName" : "deposit-account-management",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7505/api/v1/"
+            },
+            "Tajet": {
+                "ServiceName" : "teller",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7506/api/v1/"
+            },
+            "Atum": {
+                "ServiceName" : "teller",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7506/api/v1/"
+            },
+            "Ptah": {
+                "ServiceName" : "teller",
+                "Version" : "0.1",
+                "BaseUrl" : "http://127.0.0.1:7507/api/v1/"
+            }
+        },
         "WssdSubscriptionPackages": [
             {
                 "Plan": "3 Months",

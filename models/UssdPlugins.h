@@ -48,12 +48,12 @@ class UssdPlugins
         static const std::string _name;
         static const std::string _description;
         static const std::string _category;
+        static const std::string _author;
         static const std::string _default_config;
         static const std::string _spec;
         static const std::string _is_active;
         static const std::string _is_built_in;
         static const std::string _is_preinstalled;
-        static const std::string _business_id;
         static const std::string _version;
         static const std::string _created_at;
         static const std::string _updated_at;
@@ -145,6 +145,15 @@ class UssdPlugins
     void setCategory(const std::string &pCategory) noexcept;
     void setCategory(std::string &&pCategory) noexcept;
 
+    /**  For column author  */
+    ///Get the value of the column author, returns the default value if the column is null
+    const std::string &getValueOfAuthor() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<std::string> &getAuthor() const noexcept;
+    ///Set the value of the column author
+    void setAuthor(const std::string &pAuthor) noexcept;
+    void setAuthor(std::string &&pAuthor) noexcept;
+
     /**  For column default_config  */
     ///Get the value of the column default_config, returns the default value if the column is null
     const std::string &getValueOfDefaultConfig() const noexcept;
@@ -191,16 +200,6 @@ class UssdPlugins
     ///Set the value of the column is_preinstalled
     void setIsPreinstalled(const bool &pIsPreinstalled) noexcept;
     void setIsPreinstalledToNull() noexcept;
-
-    /**  For column business_id  */
-    ///Get the value of the column business_id, returns the default value if the column is null
-    const std::string &getValueOfBusinessId() const noexcept;
-    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
-    const std::shared_ptr<std::string> &getBusinessId() const noexcept;
-    ///Set the value of the column business_id
-    void setBusinessId(const std::string &pBusinessId) noexcept;
-    void setBusinessId(std::string &&pBusinessId) noexcept;
-    void setBusinessIdToNull() noexcept;
 
     /**  For column version  */
     ///Get the value of the column version, returns the default value if the column is null
@@ -257,12 +256,12 @@ class UssdPlugins
     std::shared_ptr<std::string> name_;
     std::shared_ptr<std::string> description_;
     std::shared_ptr<std::string> category_;
+    std::shared_ptr<std::string> author_;
     std::shared_ptr<std::string> defaultConfig_;
     std::shared_ptr<std::string> spec_;
     std::shared_ptr<bool> isActive_;
     std::shared_ptr<bool> isBuiltIn_;
     std::shared_ptr<bool> isPreinstalled_;
-    std::shared_ptr<std::string> businessId_;
     std::shared_ptr<std::string> version_;
     std::shared_ptr<::trantor::Date> createdAt_;
     std::shared_ptr<::trantor::Date> updatedAt_;
@@ -316,40 +315,40 @@ class UssdPlugins
             sql += "category,";
             ++parametersCount;
         }
-        sql += "default_config,";
-        ++parametersCount;
-        if(!dirtyFlag_[4])
+        if(dirtyFlag_[4])
         {
-            needSelection=true;
+            sql += "author,";
+            ++parametersCount;
         }
-        sql += "spec,";
+        sql += "default_config,";
         ++parametersCount;
         if(!dirtyFlag_[5])
         {
             needSelection=true;
         }
-        sql += "is_active,";
+        sql += "spec,";
         ++parametersCount;
         if(!dirtyFlag_[6])
         {
             needSelection=true;
         }
-        sql += "is_built_in,";
+        sql += "is_active,";
         ++parametersCount;
         if(!dirtyFlag_[7])
         {
             needSelection=true;
         }
-        sql += "is_preinstalled,";
+        sql += "is_built_in,";
         ++parametersCount;
         if(!dirtyFlag_[8])
         {
             needSelection=true;
         }
-        if(dirtyFlag_[9])
+        sql += "is_preinstalled,";
+        ++parametersCount;
+        if(!dirtyFlag_[9])
         {
-            sql += "business_id,";
-            ++parametersCount;
+            needSelection=true;
         }
         sql += "version,";
         ++parametersCount;
@@ -409,10 +408,6 @@ class UssdPlugins
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);
         }
-        else
-        {
-            sql +="default,";
-        }
         if(dirtyFlag_[5])
         {
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
@@ -453,6 +448,10 @@ class UssdPlugins
         {
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);
+        }
+        else
+        {
+            sql +="default,";
         }
         if(dirtyFlag_[10])
         {

@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.28)
 project(WssdApi CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -36,7 +36,6 @@ add_executable(${PROJECT_NAME} main.cc
         dto/BaseApiResponse.h
         domain_services/ussd_directory/UssdDirectoryService.h
         domain_services/subscription/SubscriptionService.h
-        domain_services/dsl/UssdflowToSapoTranslator.hpp
         domain_services/subscription/SubscriptionService.cc
         domain_services/ussd_directory/UssdDirectoryService.cc
         domain_services/ussd_code_inventory/UssdCodeInventoryService.h
@@ -48,19 +47,21 @@ add_executable(${PROJECT_NAME} main.cc
         domain_services/billing_ledger/BillingLedgerService.h
         domain_services/billing_ledger/BillingLedgerService.cc
         utils/codecvt_helper.h
-        domain_services/ussd_sessions/UssdSessionService.h
-        domain_services/ussd_sessions/UssdSessionService.cc
-        dto/NaloUssdSessionRequestDto.h
-        dto/HubtelUssdSessionRequestDto.h
-        dto/NaloUssdSessioResponse.h
-        dto/HubtelUssdSessioResponse.h
-        domain_services/wssd_registry/WssdRegistryServce.h
+        domain_services/wssd_registry/WssdRegistryService.h
         domain_services/wssd_registry/WssdRegistryService.cc
         dto/WssdRegistryDto.h
         dto/UssdDirectoryDto.h
         utils/IdGeneratorUtils.h
         utils/IdGeneratorUtils.cc
-        dto/PluginDto.h)
+        dto/PluginDto.h
+        domain_services/turbo_ledger/TurboLedgerService.h
+        domain_services/turbo_ledger/TurboLedgerService.cc
+        dto/UssdSessionResponse.h
+        dto/UssdSessionRequestDto.h
+        domain_services/ussd_sessions/UssdSessionService.h
+        domain_services/ussd_sessions/UssdSessionService.cc
+        domain_services/adapters/DrogonHttpTransport.h
+)
 
 # ##############################################################################
 # If you include the drogon source code locally in your project, use this method
@@ -70,11 +71,10 @@ add_executable(${PROJECT_NAME} main.cc
 #
 # and comment out the following lines
 find_package(Drogon CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 #target_link_libraries(${PROJECT_NAME} PRIVATE Drogon::Drogon sapo_core)
 target_link_libraries(${PROJECT_NAME} PRIVATE
-                      Drogon::Drogon
-                      ${CMAKE_CURRENT_SOURCE_DIR}/../sapo-engine/build/libsapo_core.a
-                      ${CMAKE_CURRENT_SOURCE_DIR}/../sapo-engine/build/_deps/cpr-build/cpr/libcpr.dylib)
+        Drogon::Drogon)
 
 # Add sapo-engine project
 #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../sapo-engine sapo-engine_build)
@@ -95,7 +95,7 @@ aux_source_directory(plugins PLUGIN_SRC)
 aux_source_directory(models MODEL_SRC)
 
 drogon_create_views(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/views
-                    ${CMAKE_CURRENT_BINARY_DIR})
+        ${CMAKE_CURRENT_BINARY_DIR})
 # use the following line to create views with namespaces.
 # drogon_create_views(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/views
 #                     ${CMAKE_CURRENT_BINARY_DIR} TRUE)
@@ -104,18 +104,21 @@ drogon_create_views(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/views
 # drogon_create_views(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/views
 #                     ${CMAKE_CURRENT_BINARY_DIR} TRUE CHANGE_ME)
 
+
 target_include_directories(${PROJECT_NAME}
-                           PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
-                                   ${CMAKE_CURRENT_SOURCE_DIR}/models
-                                   ${CMAKE_CURRENT_SOURCE_DIR}/../sapo-engine/src
-                                   ${CMAKE_CURRENT_SOURCE_DIR}/../sapo-engine/build/_deps/json-src/include)
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/models
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/sapo/include/sapo
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/sapo/include/sapo/third_party)
+
+
 target_sources(${PROJECT_NAME}
-               PRIVATE
-               ${SRC_DIR}
-               ${CTL_SRC}
-               ${FILTER_SRC}
-               ${PLUGIN_SRC}
-               ${MODEL_SRC})
+        PRIVATE
+        ${SRC_DIR}
+        ${CTL_SRC}
+        ${FILTER_SRC}
+        ${PLUGIN_SRC}
+        ${MODEL_SRC})
 # ##############################################################################
 # uncomment the following line for dynamically loading views 
 # set_property(TARGET ${PROJECT_NAME} PROPERTY ENABLE_EXPORTS ON)
