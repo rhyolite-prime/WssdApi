@@ -1,7 +1,7 @@
 {
   "name": "wssd.demo",
   "version": "1.0",
-  "description": "Multi-step demo flow: name -> amount -> confirm. Shows prompt chaining, template interpolation and choice routing. Validate with: sapoc validate sapo/workflows/wssd-demo.json",
+  "description": "Multi-step demo flow: name -> amount -> confirm. NOTE: the engine validator forbids control-flow cycles, so menus are forward-only DAGs: invalid input terminates instead of looping back. Validate with: sapoc validate sapo/workflows/wssd-demo.json",
   "nodes": [
     {
       "id": "ask_name",
@@ -44,7 +44,7 @@
         "1": "done",
         "2": "cancelled"
       },
-      "default": "confirm"
+      "default": "invalid_choice"
     },
     {
       "id": "done",
@@ -62,6 +62,15 @@
       "message": "Request cancelled. Thank you.",
       "output": {
         "message": "Request cancelled. Thank you."
+      }
+    },
+    {
+      "id": "invalid_choice",
+      "type": "terminate",
+      "status": "success",
+      "message": "Invalid choice. Session cancelled. Please dial again.",
+      "output": {
+        "message": "Invalid choice. Session cancelled. Please dial again."
       }
     }
   ]

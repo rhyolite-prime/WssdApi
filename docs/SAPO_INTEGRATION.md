@@ -99,8 +99,11 @@ conversation; `terminate` with `output.message` (and/or `message`) to end it.
 does not already list them.
 
 Sample blueprints live in `sapo/workflows/` (`default.json` is the fallback
-menu, `wssd-demo.json` a multi-step flow). Validate any blueprint with the
-engine CLI before deploying it:
+menu, `wssd-demo.json` a multi-step flow). Blueprints must be forward-only
+DAGs: the engine validator flags any control-flow cycle (e.g. a menu
+"try again" edge back to an earlier node) as a `WARNING`, so invalid input
+terminates the session with a redial message instead of looping. Validate
+any blueprint with the engine CLI before deploying it:
 
 ```
 sapoc validate sapo/workflows/my-service.json
@@ -121,6 +124,19 @@ override (`SAPO_REDIS_URL` or `SAPO_REDIS_HOST`/`SAPO_REDIS_PORT`,
 `sapo/sapo-config.json` is the optional engine provider config (connector
 settings, `config.*`/`secret.*` bindings for blueprints, engine limits).
 Secrets declared there are redacted from every engine log line.
+
+Ownership split: the plugin owns the **runtime environment** (Redis URL,
+log level, state dir, paths) via `config.json` + `SAPO_*` env; the engine
+file owns only the **execution profile** (`engine.workers`,
+`engine.max_node_visits`, `engine.max_depth`, `engine.default_timeout_ms`).
+Do **not** add `engine.state_redis`, `engine.state_dir`, or
+`engine.log_level` to `sapo-config.json` — `VirtualMachine::start()` takes
+over state-store and log-level selection whenever those keys exist, and
+fails startup outright when `state_redis` is present but unresolvable (even
+a well-formed `{"$env": "SAPO_REDIS_URL"}` breaks boot when the variable is
+unset, because the mere presence of the key disables the file-store
+fallback). Keep Redis configuration in exactly one place: `redis_url` /
+`SAPO_REDIS_URL`, which the plugin validates with a dial check at startup.
 
 ## State, scaling, timeouts
 
@@ -175,7 +191,9 @@ cmake --build build -j"$(nproc)"
 
 | Symptom | Likely cause |
 |---|---|
-| Every turn answers "Service temporarily unavailable" | Engine failed to start — read the `[sapo]` errors at boot (bad blueprint in `sapo/workflows/`, unreadable state dir) |
+| Every turn answers "Service temporarily unavailable" | Engine failed to start — read the `[sapo]` errors at boot (bad blueprint in `sapo/workflows/`, unreadable state dir). `[sapo] engine warning at startup` lines are non-fatal by design (blueprint validator advisories such as cycle reports) |
+| `config: environment variable 'redis://…' … is not set` at boot | `sapo-config.json` contains `{"$env": "<url>"}` — a URL pasted where an env var *name* belongs. Delete `engine.state_redis` from the file and set Redis via `redis_url` / `SAPO_REDIS_URL` instead; discard the bad file on `git pull` conflicts |
+| `config: engine.state_redis must be a non-empty redis:// URL string` at boot | `state_redis` is present but unresolvable (unset env var, typo'd URL). Same fix: remove the key from `sapo-config.json`, configure Redis only through the plugin |
 | "Service not available for this code" | No registry/file/default blueprint matched — check `wssd_registry.executable` for the code and `sapo/workflows/default.json` |
 | Hubtel session restarts mid-menu | State store lost (file store on an ephemeral disk, or Redis flushed) — use Redis in production |
 | Blueprint HTTP calls fail | Downstream unreachable from the API host, or a relative URL in the blueprint (absolute `http(s)` URLs only) |

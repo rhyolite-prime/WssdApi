@@ -94,6 +94,25 @@ expect_code 200 "nalo continue" && {
     expect_jq '.MSG | contains("balance")' "nalo choice renders balance message"
 }
 
+# 2b. Nalo: an unknown choice terminates with a redial message (blueprints
+# are forward-only DAGs; the engine validator forbids menu back-edges).
+NALO_SESSION_INVALID="nalo-e2e-invalid-$TS"
+post /api/v1/ussd-interaction/nalo "$(cat <<JSON
+{"USERID": "wssd-test", "MSISDN": "233241234567", "USERDATA": "*123#",
+ "MSGTYPE": true, "NETWORK": "MTN", "SESSIONID": "$NALO_SESSION_INVALID"}
+JSON
+)"
+expect_code 200 "nalo invalid-choice dial" || true
+post /api/v1/ussd-interaction/nalo "$(cat <<JSON
+{"USERID": "wssd-test", "MSISDN": "233241234567", "USERDATA": "9",
+ "MSGTYPE": true, "NETWORK": "MTN", "SESSIONID": "$NALO_SESSION_INVALID"}
+JSON
+)"
+expect_code 200 "nalo invalid choice" && {
+    expect_jq '.MSGTYPE == false' "nalo invalid choice closes session"
+    expect_jq '.MSG | contains("Invalid choice")' "nalo invalid choice renders redial message"
+}
+
 # 3+4. Hubtel: Initiation -> menu, then Response "2" -> Release
 HUB_SESSION="hub-e2e-$TS"
 post /api/v1/ussd-interaction/hubtel "$(cat <<JSON

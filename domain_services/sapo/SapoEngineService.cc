@@ -5,7 +5,6 @@
 #include "SapoEngineService.h"
 
 #include <chrono>
-#include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <utility>
@@ -42,19 +41,6 @@ sapo::obs::LogLevel parseLogLevel(const std::string &level) {
         return sapo::obs::LogLevel::Off;
     }
     return sapo::obs::LogLevel::Info;
-}
-
-/// Resolves a config value that may be a plain string or a
-/// {"$env": "NAME"} indirection (the sapo-config.json convention).
-std::string expandEnvString(const nlohmann::json &value) {
-    if (value.is_string()) {
-        return value.get<std::string>();
-    }
-    if (value.is_object() && value.contains("$env") && value["$env"].is_string()) {
-        const char *env = std::getenv(value["$env"].get<std::string>().c_str());
-        return env != nullptr ? std::string(env) : std::string();
-    }
-    return "";
 }
 
 #if defined(SAPO_ENABLE_REDIS)
@@ -126,21 +112,36 @@ void applyEngineLimits(sapo::runtime::TaskServices &services) {
     if (!engine.is_object()) {
         return;
     }
-    if (engine.contains("max_node_visits") && engine["max_node_visits"].is_number_unsigned()) {
-        services.limits.max_node_visits = engine["max_node_visits"].get<std::size_t>();
+    // nlohmann parses non-negative literals as number_unsigned and negatives
+    // as number_integer, so exact-type checks would silently miss values.
+    // Accept any JSON number and range-check it explicitly instead.
+    auto sizeLimit = [&engine](const char *key, size_t &out) {
+        const auto it = engine.find(key);
+        if (it == engine.end() || !it->is_number()) {
+            return;
+        }
+        const double value = it->get<double>();
+        if (value >= 0 && value <= 9007199254740991.0) {
+            out = static_cast<size_t>(value);
+        }
+    };
+    auto millisLimit = [&engine](const char *key, int64_t &out) {
+        const auto it = engine.find(key);
+        if (it == engine.end() || !it->is_number()) {
+            return;
+        }
+        out = static_cast<int64_t>(it->get<double>());
+    };
+    sizeLimit("max_node_visits", services.limits.max_node_visits);
+    sizeLimit("max_depth", services.limits.max_depth);
+    sizeLimit("max_branch_visits", services.limits.max_branch_visits);
+    if (engine.contains("default_timeout_ms") && engine["default_timeout_ms"].is_number()) {
+        int64_t timeoutMs = 0;
+        millisLimit("default_timeout_ms", timeoutMs);
+        services.limits.default_timeout_ms = timeoutMs;
     }
-    if (engine.contains("max_depth") && engine["max_depth"].is_number_unsigned()) {
-        services.limits.max_depth = engine["max_depth"].get<std::size_t>();
-    }
-    if (engine.contains("default_timeout_ms") && engine["default_timeout_ms"].is_number_integer()) {
-        services.limits.default_timeout_ms = engine["default_timeout_ms"].get<int64_t>();
-    }
-    if (engine.contains("max_retry_delay_ms") && engine["max_retry_delay_ms"].is_number_integer()) {
-        services.limits.max_retry_delay_ms = engine["max_retry_delay_ms"].get<int64_t>();
-    }
-    if (engine.contains("inline_wait_limit_ms") && engine["inline_wait_limit_ms"].is_number_integer()) {
-        services.limits.inline_wait_limit_ms = engine["inline_wait_limit_ms"].get<int64_t>();
-    }
+    millisLimit("max_retry_delay_ms", services.limits.max_retry_delay_ms);
+    millisLimit("inline_wait_limit_ms", services.limits.inline_wait_limit_ms);
 }
 
 }  // namespace
@@ -169,7 +170,8 @@ bool SapoEngineService::configure(const SapoSettings &settings) {
         // Outbound HTTP from blueprints reuses Drogon's client/IO loops.
         services.transport = std::make_shared<HostDrogonTransport>();
 
-        // Provider config first: it may carry the redis URL and engine limits.
+        // Provider config first: it carries bindings and engine limits
+        // (never the Redis URL — see the state_redis NOTE below).
         std::shared_ptr<sapo::config::ProviderConfigStore> providerConfig;
         if (!settings_.configPath.empty() && std::filesystem::exists(settings_.configPath)) {
             try {
@@ -191,14 +193,13 @@ bool SapoEngineService::configure(const SapoSettings &settings) {
                      << "' (optional); continuing without it";
         }
 
-        std::string redisUrl = settings_.redisUrl;
-        if (redisUrl.empty() && providerConfig) {
-            const nlohmann::json engine = providerConfig->engine();
-            if (engine.is_object() && engine.contains("state_redis")) {
-                redisUrl = expandEnvString(engine["state_redis"]);
-            }
-        }
-        services.state_store = buildStateStore(settings_, redisUrl);
+        // NOTE: engine.state_redis from the config file is intentionally NOT
+        // consulted here. VirtualMachine::start() takes over state-store
+        // selection whenever that key exists (and fails startup when it is
+        // unresolvable), so honoring it in two places would split-brain Redis
+        // configuration. The plugin redis_url / SAPO_REDIS_URL env is the
+        // single source of truth; sapo-config.json must not set state_redis.
+        services.state_store = buildStateStore(settings_, settings_.redisUrl);
 
         applyEngineLimits(services);
 
@@ -236,9 +237,17 @@ std::vector<std::string> SapoEngineService::start() {
     }
     std::vector<std::string> problems;
     try {
-        problems = vm_->start();
-        for (const auto &problem : problems) {
-            LOG_ERROR << "[sapo] start problem: " << problem;
+        // vm_->start() mixes blueprint-validator WARNINGs (e.g. control-flow
+        // cycle reports) into the same vector as fatal errors, and marks the
+        // VM started either way. Warnings are logged and tolerated so they do
+        // not abort application startup; only fatal entries are returned.
+        for (const auto &problem : vm_->start()) {
+            if (isWarningProblem(problem)) {
+                LOG_WARN << "[sapo] engine warning at startup: " << problem;
+            } else {
+                LOG_ERROR << "[sapo] start problem: " << problem;
+                problems.push_back(problem);
+            }
         }
         if (!problems.empty()) {
             started_.store(false);

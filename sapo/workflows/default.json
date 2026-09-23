@@ -1,7 +1,7 @@
 {
   "name": "wssd.default",
   "version": "1.0",
-  "description": "Fallback WSSD menu served when no service-specific blueprint resolves. Validate with: sapoc validate sapo/workflows/default.json",
+  "description": "Fallback WSSD menu served when no service-specific blueprint resolves. NOTE: the engine validator forbids control-flow cycles, so menus are forward-only DAGs: invalid input terminates with a redial message instead of looping back. Validate with: sapoc validate sapo/workflows/default.json",
   "nodes": [
     {
       "id": "main_menu",
@@ -23,7 +23,7 @@
         "2": "help",
         "0": "goodbye"
       },
-      "default": "main_menu"
+      "default": "invalid_choice"
     },
     {
       "id": "balance",
@@ -50,6 +50,15 @@
       "message": "Thank you for using WSSD. Goodbye.",
       "output": {
         "message": "Thank you for using WSSD. Goodbye."
+      }
+    },
+    {
+      "id": "invalid_choice",
+      "type": "terminate",
+      "status": "success",
+      "message": "Invalid choice. Please dial again.",
+      "output": {
+        "message": "Invalid choice. Please dial again."
       }
     }
   ]
