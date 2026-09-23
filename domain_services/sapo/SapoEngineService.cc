@@ -5,6 +5,7 @@
 #include "SapoEngineService.h"
 
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <utility>
@@ -174,6 +175,27 @@ bool SapoEngineService::configure(const SapoSettings &settings) {
     settings_ = settings;
     settings_.applyEnvOverrides();
 
+    // One-line effective configuration (values, never secrets: the Redis
+    // URL can carry a password, so only set/unset + source are logged).
+    // Relative paths resolve from the process working directory, which is
+    // why the CWD is part of this line.
+    {
+        const char *envUrl = std::getenv("SAPO_REDIS_URL");
+        const char *envHost = std::getenv("SAPO_REDIS_HOST");
+        const bool fromEnv = (envUrl != nullptr && *envUrl != '\0') ||
+                             (envHost != nullptr && *envHost != '\0');
+        std::error_code cwdError;
+        const auto cwd = std::filesystem::current_path(cwdError);
+        LOG_INFO << "[sapo] settings: cwd='"
+                 << (cwdError ? std::string("<unknown>") : cwd.string()) << "' config_path='"
+                 << settings_.configPath << "' workflow_dir='" << settings_.workflowDirectory
+                 << "' state_dir='" << settings_.stateDirectory << "' redis="
+                 << (settings_.redisUrl.empty() ? "unset" : "set")
+                 << " (source: " << (fromEnv ? "env" : (!settings_.redisUrl.empty() ? "config.json" : "none"))
+                 << ") default_workflow='" << settings_.defaultWorkflowFile << "' log_level='"
+                 << settings_.logLevel << "'";
+    }
+
     try {
         auto services = sapo::runtime::TaskServices::defaults();
 
@@ -276,8 +298,15 @@ std::vector<std::string> SapoEngineService::start() {
         return {std::string("sapo engine start threw: ") + e.what()};
     }
     started_.store(true);
-    LOG_INFO << "[sapo] engine started (workflows=" << vm_->workflows().size()
-             << ", store=" << vm_->services().state_store->kind() << ")";
+    std::string workflowIds;
+    for (const auto &id : vm_->workflows().ids()) {
+        if (!workflowIds.empty()) {
+            workflowIds += ",";
+        }
+        workflowIds += id;
+    }
+    LOG_INFO << "[sapo] engine started (workflows=" << vm_->workflows().size() << " [" << workflowIds
+             << "], store=" << vm_->services().state_store->kind() << ")";
     return {};
 }
 
