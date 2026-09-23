@@ -38,92 +38,125 @@ class HostDrogonTransport final : public sapo::http::IHttpTransport {
         const auto started = std::chrono::steady_clock::now();
         sapo::http::Response response;
 
-        std::string base;
-        std::string path;
-        if (!splitUrl(request.url, base, path)) {
-            response.transport_error = "drogon transport requires an absolute http(s) URL, got: " + request.url;
-            return finish(response, started);
-        }
-
-        drogon::HttpMethod method = drogon::Get;
-        if (!toDrogonMethod(request.method, method)) {
+        drogon::HttpMethod initialMethod = drogon::Get;
+        if (!toDrogonMethod(request.method, initialMethod)) {
             response.transport_error = "drogon transport does not support HTTP method: " + request.method;
             return finish(response, started);
         }
+        const long timeoutMs = request.timeout_ms > 0 ? request.timeout_ms : 10000;
+        const double timeoutSec = static_cast<double>(timeoutMs) / 1000.0;
 
-        try {
-            auto client = drogon::HttpClient::newHttpClient(base);
-            auto drogonRequest = drogon::HttpRequest::newHttpRequest();
-            drogonRequest->setMethod(method);
-            drogonRequest->setPath(path + querySuffix(path, request.query));
-
-            if (request.headers.is_object()) {
-                for (auto it = request.headers.begin(); it != request.headers.end(); ++it) {
-                    drogonRequest->addHeader(it.key(), headerValue(it.value()));
-                }
-            }
-
-            if (request.basic_auth_user.has_value()) {
-                const std::string password = request.basic_auth_password.value_or("");
-                drogonRequest->addHeader(
-                    "Authorization", "Basic " + base64Encode(*request.basic_auth_user + ":" + password));
-            } else if (request.bearer_token.has_value()) {
-                drogonRequest->addHeader("Authorization", "Bearer " + *request.bearer_token);
-            }
-
-            if (request.body.has_value()) {
-                if (request.body->is_string()) {
-                    drogonRequest->setBody(request.body->get<std::string>());
-                } else {
-                    if (!hasHeader(request.headers, "content-type")) {
-                        drogonRequest->setContentTypeCode(drogon::CT_APPLICATION_JSON);
-                    }
-                    drogonRequest->setBody(request.body->dump());
-                }
-            }
-
-            const long timeoutMs = request.timeout_ms > 0 ? request.timeout_ms : 10000;
-            const double timeoutSec = static_cast<double>(timeoutMs) / 1000.0;
-
-            // Join the async client with a shared promise so a late gateway
-            // reply after our wait deadline cannot touch a dead stack frame.
-            auto promise =
-                std::make_shared<std::promise<std::pair<drogon::ReqResult, drogon::HttpResponsePtr>>>();
-            auto future = promise->get_future();
-            client->sendRequest(
-                drogonRequest,
-                [promise](drogon::ReqResult result, const drogon::HttpResponsePtr &resp) {
-                    try {
-                        promise->set_value({result, resp});
-                    } catch (...) {
-                        // The waiter already left (timeout path); nothing to do.
-                    }
-                },
-                timeoutSec);
-
-            // Drogon's own timeout fires first; this deadline only guards the
-            // callback itself from never arriving.
-            if (future.wait_for(std::chrono::milliseconds(timeoutMs + 2000)) != std::future_status::ready) {
-                response.transport_error = "drogon HTTP request timed out: " + request.url;
+        // The engine sets follow_redirects by default and blueprints rely on
+        // it (http -> https upgrades are the common case), but Drogon's client
+        // never follows redirects itself — so the loop below does, bounded to
+        // 5 hops. Non-redirect responses take exactly one hop, as before.
+        std::string url = request.url;
+        drogon::HttpMethod method = initialMethod;
+        bool sendBody = request.body.has_value();
+        for (int hop = 0; hop < 5; ++hop) {
+            std::string base;
+            std::string path;
+            if (!splitUrl(url, base, path)) {
+                response.transport_error = "drogon transport requires an absolute http(s) URL, got: " + url;
                 return finish(response, started);
             }
 
-            const auto [result, drogonResponse] = future.get();
-            if (result == drogon::ReqResult::Ok && drogonResponse) {
-                response.status_code = static_cast<int>(drogonResponse->getStatusCode());
-                response.body = std::string(drogonResponse->getBody());
-                for (const auto &[name, value] : drogonResponse->getHeaders()) {
-                    response.headers[name] = value;
+            try {
+                auto client = drogon::HttpClient::newHttpClient(base);
+                auto drogonRequest = drogon::HttpRequest::newHttpRequest();
+                drogonRequest->setMethod(method);
+                drogonRequest->setPath(path + querySuffix(path, hop == 0 ? request.query
+                                                                         : nlohmann::json::object()));
+
+                if (request.headers.is_object()) {
+                    for (auto it = request.headers.begin(); it != request.headers.end(); ++it) {
+                        drogonRequest->addHeader(it.key(), headerValue(it.value()));
+                    }
                 }
-            } else {
+
+                if (request.basic_auth_user.has_value()) {
+                    const std::string password = request.basic_auth_password.value_or("");
+                    drogonRequest->addHeader(
+                        "Authorization", "Basic " + base64Encode(*request.basic_auth_user + ":" + password));
+                } else if (request.bearer_token.has_value()) {
+                    drogonRequest->addHeader("Authorization", "Bearer " + *request.bearer_token);
+                }
+
+                if (sendBody && request.body.has_value()) {
+                    if (request.body->is_string()) {
+                        drogonRequest->setBody(request.body->get<std::string>());
+                    } else {
+                        if (!hasHeader(request.headers, "content-type")) {
+                            drogonRequest->setContentTypeCode(drogon::CT_APPLICATION_JSON);
+                        }
+                        drogonRequest->setBody(request.body->dump());
+                    }
+                }
+
+                // Join the async client with a shared promise so a late gateway
+                // reply after our wait deadline cannot touch a dead stack frame.
+                auto promise =
+                    std::make_shared<std::promise<std::pair<drogon::ReqResult, drogon::HttpResponsePtr>>>();
+                auto future = promise->get_future();
+                client->sendRequest(
+                    drogonRequest,
+                    [promise](drogon::ReqResult result, const drogon::HttpResponsePtr &resp) {
+                        try {
+                            promise->set_value({result, resp});
+                        } catch (...) {
+                            // The waiter already left (timeout path); nothing to do.
+                        }
+                    },
+                    timeoutSec);
+
+                // Drogon's own timeout fires first; this deadline only guards the
+                // callback itself from never arriving.
+                if (future.wait_for(std::chrono::milliseconds(timeoutMs + 2000)) != std::future_status::ready) {
+                    response.transport_error = "drogon HTTP request timed out: " + url;
+                    return finish(response, started);
+                }
+
+                const auto [result, drogonResponse] = future.get();
+                if (result == drogon::ReqResult::Ok && drogonResponse) {
+                    const int statusCode = static_cast<int>(drogonResponse->getStatusCode());
+                    response.status_code = statusCode;
+                    response.body = std::string(drogonResponse->getBody());
+                    std::string location;
+                    for (const auto &[name, value] : drogonResponse->getHeaders()) {
+                        response.headers[name] = value;
+                        if (location.empty() && equalsIgnoreCase(name, "location")) {
+                            location = value;
+                        }
+                    }
+                    if (isRedirectStatus(statusCode) && !location.empty()) {
+                        if (!request.follow_redirects || hop + 1 >= 5) {
+                            // Redirects off, or hop budget spent: surface the
+                            // 3xx itself so the failure stays diagnosable.
+                            return finish(response, started);
+                        }
+                        url = resolveRedirectUrl(base, path, location);
+                        if (statusCode == 303 ||
+                            ((statusCode == 301 || statusCode == 302) && method == drogon::Post)) {
+                            method = drogon::Get;
+                            sendBody = false;
+                        }
+                        response = sapo::http::Response{};
+                        continue;
+                    }
+                    return finish(response, started);
+                }
                 response.transport_error =
-                    "drogon HTTP failure (" + reqResultName(result) + "): " + request.url;
+                    "drogon HTTP failure (" + reqResultName(result) + "): " + url;
+                return finish(response, started);
+            } catch (const std::exception &e) {
+                response.transport_error = std::string("drogon transport exception: ") + e.what();
+                return finish(response, started);
+            } catch (...) {
+                response.transport_error = "drogon transport threw an unknown exception: " + url;
+                return finish(response, started);
             }
-        } catch (const std::exception &e) {
-            response.transport_error = std::string("drogon transport exception: ") + e.what();
-        } catch (...) {
-            response.transport_error = "drogon transport threw an unknown exception: " + request.url;
         }
+        // Unreachable: every hop above returns or continues.
         return finish(response, started);
     }
 
@@ -137,6 +170,32 @@ class HostDrogonTransport final : public sapo::http::IHttpTransport {
         const auto elapsed = std::chrono::steady_clock::now() - started;
         response.elapsed_ms = std::chrono::duration<double, std::milli>(elapsed).count();
         return response;
+    }
+
+    static bool isRedirectStatus(int status) {
+        return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
+    }
+
+    /// Resolves a redirect `Location` against the request that produced it:
+    /// absolute URLs pass through, root-relative paths keep the client base,
+    /// anything else resolves against the request directory.
+    static std::string resolveRedirectUrl(const std::string &base,
+                                          const std::string &path,
+                                          const std::string &location) {
+        if (location.rfind("http://", 0) == 0 || location.rfind("https://", 0) == 0) {
+            return location;
+        }
+        if (!location.empty() && location.front() == '/') {
+            return base + location;
+        }
+        std::string directory = path;
+        const auto queryBegin = directory.find('?');
+        if (queryBegin != std::string::npos) {
+            directory.resize(queryBegin);
+        }
+        const auto lastSlash = directory.rfind('/');
+        directory = (lastSlash == std::string::npos) ? "/" : directory.substr(0, lastSlash + 1);
+        return base + directory + location;
     }
 
     /// Splits "https://host:port/path?query" into a Drogon client base

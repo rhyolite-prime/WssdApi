@@ -462,13 +462,27 @@ sapo::runtime::ExecutionOutcome SapoEngineService::executeUssdTurn(const std::st
     // only serves the restart-as-fresh path, where full context is correct.
     auto outcome = resumeUssdSession(sapoSessionId, rawInput);
     if (outcome.status == "failed") {
-        // The checkpoint may have expired between the lookup and the resume.
-        // Restart once under the same id instead of failing the subscriber.
-        LOG_WARN << "[sapo] resume failed for " << sapoSessionId << " (" << outcome.error_code
-                 << "); restarting session";
-        input["is_start"] = true;
-        input["restarted_after_expiry"] = true;
-        outcome = startUssdSession(workflowId, input, sapoSessionId, correlationId);
+        // A failed resume has two very different causes, and only one of them
+        // justifies a restart: the checkpoint may have expired between the
+        // lookup above and the resume (restart cleanly under the same id), or
+        // the turn itself may have errored — an HTTP node failed, an expression
+        // was invalid, a capability was missing. Restarting on an execution
+        // error would discard the real failure and drop the subscriber back at
+        // the main menu, so re-read the checkpoint and restart only when the
+        // parked session is actually gone.
+        const auto after = findSession(sapoSessionId);
+        if (!after.has_value() || !after->resumable) {
+            LOG_WARN << "[sapo] resume failed for " << sapoSessionId << " (code=" << outcome.error_code
+                     << " node=" << outcome.error_node << " error=" << outcome.error
+                     << "); checkpoint gone, restarting session";
+            input["is_start"] = true;
+            input["restarted_after_expiry"] = true;
+            outcome = startUssdSession(workflowId, input, sapoSessionId, correlationId);
+        } else {
+            LOG_ERROR << "[sapo] turn execution failed for " << sapoSessionId << " (code="
+                      << outcome.error_code << " node=" << outcome.error_node
+                      << " error=" << outcome.error << "); parked session kept, not restarting";
+        }
     }
     return outcome;
 }
