@@ -78,6 +78,14 @@ std::shared_ptr<sapo::runtime::IStateStore> buildStateStore(
             options.pool_size = settings.redisPoolSize == 0 ? 8 : settings.redisPoolSize;
             options.client_name = "wssdapi-sapo";
             auto client = std::make_shared<sapo::redis::SocketRedisClient>(std::move(options));
+            // Dial check: a lazy client would only fail per-turn (every lookup
+            // throwing looks like "no session" downstream). Fail fast here so
+            // an unreachable Redis falls back to the file store with one loud
+            // error instead of breaking every subscriber turn. describe()
+            // never includes the password.
+            if (!client->healthy()) {
+                throw std::runtime_error("cannot reach " + client->options().describe());
+            }
             sapo::redis::RedisStateStoreOptions storeOptions;
             storeOptions.ttl_seconds = settings.redisTtlSeconds;
             storeOptions.atomic_index = settings.redisAtomicIndex;
@@ -407,7 +415,12 @@ sapo::runtime::ExecutionOutcome SapoEngineService::executeUssdTurn(const std::st
 
     input["input"] = rawInput;
     input["is_start"] = false;
-    auto outcome = resumeUssdSession(sapoSessionId, input);
+    // NOTE: resume takes the subscriber's raw reply as a scalar, NOT the
+    // context object. The engine stores the resume argument verbatim into
+    // the prompt's input_variable (and $input), so an object here would
+    // poison every choice route with a non-string $choice. `input` below
+    // only serves the restart-as-fresh path, where full context is correct.
+    auto outcome = resumeUssdSession(sapoSessionId, rawInput);
     if (outcome.status == "failed") {
         // The checkpoint may have expired between the lookup and the resume.
         // Restart once under the same id instead of failing the subscriber.

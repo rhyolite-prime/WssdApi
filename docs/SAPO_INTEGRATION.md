@@ -36,7 +36,10 @@ provider-neutral JSON.
    `BlockingRunner` pool. The engine session id is deterministic —
    `nalo:<SESSIONID>` / `hubtel:<SessionId>` — so gateway retries resume the
    same checkpoint instead of forking the conversation, and a resume that
-   fails (expired checkpoint) is retried once as a fresh start.
+   fails (expired checkpoint) is retried once as a fresh start. Resumes pass
+   the subscriber's raw reply as a scalar — the engine stores the resume
+   argument verbatim into the prompt's `input_variable`, so the context
+   object is start-only.
 5. The `ExecutionOutcome` is rendered to a provider-neutral `UssdResult`
    (`awaiting_input`/`suspended` => continue, everything terminal => close)
    and the adapter encodes the gateway's response shape. Failures degrade to
