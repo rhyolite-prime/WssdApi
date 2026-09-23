@@ -108,7 +108,14 @@ std::shared_ptr<sapo::runtime::IStateStore> buildStateStore(
                   << "' (" << ec.message() << "); using in-memory state (NOT durable)";
         return std::make_shared<sapo::runtime::InMemoryStateStore>();
     }
-    LOG_INFO << "[sapo] state store: file (" << settings.stateDirectory << ")";
+    if (redisUrl.empty()) {
+        LOG_INFO << "[sapo] state store: file (" << settings.stateDirectory
+                 << ") — redis_url is not set (set SAPO_REDIS_URL or config redis_url for Redis)";
+    } else {
+        // A redis_url WAS configured but unusable; the reason was already
+        // logged as an error above, this line just confirms the fallback.
+        LOG_INFO << "[sapo] state store: file (" << settings.stateDirectory << ")";
+    }
     return std::make_shared<sapo::runtime::FileStateStore>(settings.stateDirectory);
 }
 
