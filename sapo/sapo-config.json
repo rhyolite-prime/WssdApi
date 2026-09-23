@@ -6,7 +6,7 @@
     "max_node_visits": 100000,
     "max_depth": 8,
     "default_timeout_ms": 180000,
-    "state_redis": { "$env": "SAPO_REDIS_URL" },
+    "state_redis": { "$env": "redis://127.0.0.1:6379/1" },
     "state_redis_ttl": 900,
     "state_redis_pool": 8
   },
