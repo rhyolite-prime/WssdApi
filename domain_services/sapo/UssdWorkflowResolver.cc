@@ -146,8 +146,7 @@ drogon::Task<std::optional<ResolvedWorkflow>> UssdWorkflowResolver::lookupDataba
     try {
         auto db = drogon::app().getDbClient();
         drogon::orm::CoroMapper<WssdRegistry> mapper(db);
-        const std::string columns[] = {WssdRegistry::Cols::_ussd_code,
-                                       WssdRegistry::Cols::_merchant_identifier};
+        const std::string columns[] = {WssdRegistry::Cols::_ussd_code};
         for (const auto &column : columns) {
             auto rows = co_await mapper.limit(1).findBy(
                 drogon::orm::Criteria(column, drogon::orm::CompareOperator::EQ, key));
