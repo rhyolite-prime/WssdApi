@@ -158,16 +158,24 @@ drogon::Task<std::optional<ResolvedWorkflow>> UssdWorkflowResolver::resolve(
         }
     }
     if (!found) {
+        // Join the tried spellings so a registry miss is diagnosable from
+        // this line alone (compare against wssd_registry.ussd_code).
+        std::string tried;
+        for (const auto &key : ordered) {
+            if (!tried.empty()) {
+                tried += ", ";
+            }
+            tried += "'" + key + "'";
+        }
         if (auto fallback = lookupFileStem(settings_.defaultWorkflowFile)) {
             LOG_WARN << "[ussd] no workflow for service='" << serviceKey << "' dial='" << dialCode
-                     << "'; using default blueprint";
+                     << "' (tried keys: " << tried << "); using default blueprint";
             found = std::move(fallback);
+        } else {
+            LOG_ERROR << "[ussd] no workflow for service='" << serviceKey << "' dial='" << dialCode
+                      << "' (tried keys: " << tried << ") and no default blueprint";
+            co_return std::optional<ResolvedWorkflow>{};
         }
-    }
-    if (!found) {
-        LOG_ERROR << "[ussd] no workflow for service='" << serviceKey << "' dial='" << dialCode
-                  << "' and no default blueprint";
-        co_return std::optional<ResolvedWorkflow>{};
     }
     // Attribute the audit row: the subscription whose ussd_code matches the
     // dialed service ("" when none — the audit insert is then skipped).

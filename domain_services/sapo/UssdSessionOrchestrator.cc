@@ -71,6 +71,7 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
     // missed binding (expired, cold store) falls back to resolving from
     // the request, exactly as before.
     std::optional<ResolvedWorkflow> resolved;
+    bool fromBinding = false;
     // Continuations recover the initiation dial string from the pinned
     // binding, so $dial_code/$ussd_code stay stable across turns.
     std::string dialCode = interaction.dialCode;
@@ -79,6 +80,7 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
             return bindings_.find(sapoSessionId);
         });
         if (bound.has_value()) {
+            fromBinding = true;
             LOG_DEBUG << "[ussd] session " << sapoSessionId << " continues bound workflow "
                       << bound->workflowId;
             ResolvedWorkflow pinned;
@@ -111,7 +113,10 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
         co_return std::move(result);
     }
 
-    if (interaction.isStart) {
+    // Pin on initiation, and re-pin whenever a turn resolved fresh (missed
+    // binding, initiation signal absent): the pin memoizes what was just
+    // resolved, so later turns reuse it instead of re-querying.
+    if (interaction.isStart || !fromBinding) {
         UssdFlowBinding binding;
         binding.workflowId = workflowId;
         binding.blueprintJson = resolved->blueprintJson;
