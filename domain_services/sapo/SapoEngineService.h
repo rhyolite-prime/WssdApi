@@ -91,6 +91,9 @@ class SapoEngineService {
                                                      const std::string &sapoSessionId,
                                                      const std::string &correlationId);
 
+    /// Resumes a parked session with the subscriber's raw reply. `input` is
+    /// the scalar answer (e.g. "1"), never the context object: the engine
+    /// writes the resume argument verbatim to the prompt's input_variable.
     sapo::runtime::ExecutionOutcome resumeUssdSession(const std::string &sapoSessionId,
                                                       const nlohmann::json &input);
 
