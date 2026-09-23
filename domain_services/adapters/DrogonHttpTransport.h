@@ -41,7 +41,7 @@ class HostDrogonTransport final : public sapo::http::IHttpTransport {
         drogon::HttpMethod initialMethod = drogon::Get;
         if (!toDrogonMethod(request.method, initialMethod)) {
             response.transport_error = "drogon transport does not support HTTP method: " + request.method;
-            return finish(response, started);
+                return finish(response, started);
         }
         // One line per outbound call (INFO, not DEBUG: blueprints typically
         // swallow HTTP failures into on_error branches, so without this the
@@ -76,7 +76,11 @@ class HostDrogonTransport final : public sapo::http::IHttpTransport {
 
                 if (request.headers.is_object()) {
                     for (auto it = request.headers.begin(); it != request.headers.end(); ++it) {
-                        drogonRequest->addHeader(it.key(), headerValue(it.value()));
+                        if (equalsIgnoreCase(it.key(), "content-type")) {
+                            drogonRequest->setContentTypeString(headerValue(it.value()));
+                        } else {
+                            drogonRequest->addHeader(it.key(), headerValue(it.value()));
+                        }
                     }
                 }
 
@@ -119,7 +123,7 @@ class HostDrogonTransport final : public sapo::http::IHttpTransport {
                 // callback itself from never arriving.
                 if (future.wait_for(std::chrono::milliseconds(timeoutMs + 2000)) != std::future_status::ready) {
                     response.transport_error = "drogon HTTP request timed out: " + url;
-                    return finish(response, started);
+                return finish(response, started);
                 }
 
                 const auto [result, drogonResponse] = future.get();
@@ -138,7 +142,7 @@ class HostDrogonTransport final : public sapo::http::IHttpTransport {
                         if (!request.follow_redirects || hop + 1 >= 5) {
                             // Redirects off, or hop budget spent: surface the
                             // 3xx itself so the failure stays diagnosable.
-                            return finish(response, started);
+                return finish(response, started);
                         }
                         url = resolveRedirectUrl(base, path, location);
                         if (statusCode == 303 ||
@@ -149,7 +153,7 @@ class HostDrogonTransport final : public sapo::http::IHttpTransport {
                         response = sapo::http::Response{};
                         continue;
                     }
-                    return finish(response, started);
+                return finish(response, started);
                 }
                 response.transport_error =
                     "drogon HTTP failure (" + reqResultName(result) + "): " + url;
@@ -163,7 +167,7 @@ class HostDrogonTransport final : public sapo::http::IHttpTransport {
             }
         }
         // Unreachable: every hop above returns or continues.
-        return finish(response, started);
+                return finish(response, started);
     }
 
     [[nodiscard]] std::string name() const override {

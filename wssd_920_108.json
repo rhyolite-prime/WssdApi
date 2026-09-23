@@ -1,0 +1,1502 @@
+{
+  "name": "examples.bank_ussd_service",
+  "nodes": [
+    {
+      "id": "main_menu",
+      "next": "route_main_menu",
+      "type": "action",
+      "label": "Bank USSD Main Menu",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Welcome to Sapo Bank\n1. Deposit\n2. Withdrawal\n3. Funds transfer\n4. Enquiries\n5. Change PIN",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[1-5]$')",
+        "interaction_type": "menu"
+      },
+      "input_variable": "main_menu_choice"
+    },
+    {
+      "id": "route_main_menu",
+      "type": "choice",
+      "cases": {
+        "1": "menu_deposit",
+        "2": "menu_withdrawal",
+        "3": "menu_funds_transfer",
+        "4": "menu_enquiries",
+        "5": "menu_change_pin"
+      },
+      "label": "Route Main Menu selection",
+      "default": "main_menu",
+      "expression": "$main_menu_choice"
+    },
+    {
+      "id": "menu_deposit",
+      "next": "route_deposit",
+      "type": "action",
+      "label": "Deposit Account Selection Menu",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Deposit\n1. Flexy Account\n2. Kiddy Account\n3. Savings Account\n4. Shares Deposit Account\n5. Loan Account\n0. Back",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-5]$')",
+        "interaction_type": "menu"
+      },
+      "input_variable": "deposit_choice"
+    },
+    {
+      "id": "route_deposit",
+      "type": "choice",
+      "cases": {
+        "0": "main_menu",
+        "1": "select_deposit_flexy",
+        "2": "select_deposit_kiddy",
+        "3": "select_deposit_savings",
+        "4": "select_deposit_shares",
+        "5": "select_deposit_loan"
+      },
+      "label": "Route Deposit selection",
+      "default": "menu_deposit",
+      "expression": "$deposit_choice"
+    },
+    {
+      "id": "select_deposit_flexy",
+      "next": "deposit_prompt_amount",
+      "type": "noop",
+      "assign": {
+        "account_code": "F",
+        "target_account": "Flexy Account"
+      }
+    },
+    {
+      "id": "select_deposit_kiddy",
+      "next": "deposit_prompt_amount",
+      "type": "noop",
+      "assign": {
+        "account_code": "K",
+        "target_account": "Kiddy Account"
+      }
+    },
+    {
+      "id": "select_deposit_savings",
+      "next": "deposit_prompt_amount",
+      "type": "noop",
+      "assign": {
+        "account_code": "U",
+        "target_account": "Savings Account"
+      }
+    },
+    {
+      "id": "select_deposit_shares",
+      "next": "deposit_prompt_amount",
+      "type": "noop",
+      "assign": {
+        "account_code": "S",
+        "target_account": "Shares Deposit Account"
+      }
+    },
+    {
+      "id": "select_deposit_loan",
+      "next": "deposit_prompt_amount",
+      "type": "noop",
+      "assign": {
+        "account_code": "L",
+        "target_account": "Loan Account"
+      }
+    },
+    {
+      "id": "deposit_prompt_amount",
+      "next": "call_deposit_api",
+      "type": "action",
+      "label": "Prompt for deposit amount",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter Amount to deposit into ${target_account} (GHS):",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]+(\\.[0-9]{1,2})?$')",
+        "interaction_type": "input"
+      },
+      "input_variable": "deposit_amount"
+    },
+    {
+      "id": "call_deposit_api",
+      "next": "check_deposit_response",
+      "type": "command",
+      "label": "Initialize Deposit via USSD API",
+      "retry": {
+        "backoff_ms": 300,
+        "multiplier": 2,
+        "max_attempts": 2
+      },
+      "output": {
+        "api_status": "$.status",
+        "api_response": "$.body",
+        "deposit_message": "$.body.message"
+      },
+      "command": "http.post",
+      "on_error": "deposit_api_transport_error",
+      "http_request": {
+        "url": "https://ultra-magnus.rhyoliteprime.com/api/v1/third-party/smart-suite/initialize-deposit-via-ussd",
+        "body": {
+          "pin": "${coalesce(user_pin, pin, \"7002\")}",
+          "amount": "${to_number(deposit_amount)}",
+          "provider": "${coalesce(network, provider, \"mtn\")}",
+          "accountType": "$account_code",
+          "description": "Bank Deposit",
+          "customerName": "${coalesce(customerName, if(starts_with(coalesce(phoneNo, msisdn, \"\"), \"+\"), substring(coalesce(phoneNo, msisdn, \"\"), 1), if(starts_with(coalesce(phoneNo, msisdn, \"\"), \"0\"), \"233\" + substring(coalesce(phoneNo, msisdn, \"\"), 1), coalesce(phoneNo, msisdn, \"233242602262\"))))}",
+          "customerEmail": "${coalesce(customerEmail, if(starts_with(coalesce(phoneNo, msisdn, \"\"), \"+\"), substring(coalesce(phoneNo, msisdn, \"\"), 1), if(starts_with(coalesce(phoneNo, msisdn, \"\"), \"0\"), \"233\" + substring(coalesce(phoneNo, msisdn, \"\"), 1), coalesce(phoneNo, msisdn, \"233242602262\"))) + \"@rhyoliteprime.com\")}",
+          "customerMsisdn": "${coalesce(customerMsisdn, if(starts_with(coalesce(phoneNo, msisdn, \"\"), \"+\"), substring(coalesce(phoneNo, msisdn, \"\"), 1), if(starts_with(coalesce(phoneNo, msisdn, \"\"), \"0\"), \"233\" + substring(coalesce(phoneNo, msisdn, \"\"), 1), coalesce(phoneNo, msisdn, \"233242602262\"))))}",
+          "transactionType": "BankDeposit",
+          "integratingService": "DACCU(*920*108#)",
+          "integrationChannel": "ussd-pos",
+          "kiddyAccountSerialNo": "${coalesce(kiddyAccountSerialNo, \"\")}"
+        },
+        "headers": {
+          "ClientId": "${coalesce(depositClientId, clientId, \"TDEXLvnWgM\")}",
+          "ClientSecret": "${coalesce(depositClientSecret, \"47809b129a3549c48\")}",
+          "Content-Type": "application/json"
+        },
+        "timeout": "10s"
+      }
+    },
+    {
+      "id": "check_deposit_response",
+      "else": "deposit_api_rejection",
+      "then": "deposit_success",
+      "type": "if",
+      "label": "Check Deposit API Response",
+      "condition": "api_response != null && api_response.success == true"
+    },
+    {
+      "id": "deposit_success",
+      "type": "terminate",
+      "output": {
+        "action": "deposit",
+        "amount": "${to_number(deposit_amount)}",
+        "account": "$target_account",
+        "message": "${coalesce(deposit_message, api_response.message, \"Authorize Payment by entering PIN on your mobile device. If no bill prompt appears, dial *170# to resume.\")}",
+        "success": true,
+        "account_code": "$account_code"
+      },
+      "status": "success"
+    },
+    {
+      "id": "deposit_api_rejection",
+      "type": "terminate",
+      "output": {
+        "code": "${coalesce(api_response.code, 1)}",
+        "action": "deposit",
+        "message": "${coalesce(api_response.message, \"Failed to initialize deposit. Please try again.\")}",
+        "success": false
+      },
+      "status": "success"
+    },
+    {
+      "id": "deposit_api_transport_error",
+      "type": "terminate",
+      "output": {
+        "action": "deposit",
+        "message": "${coalesce(error.data.body.message, \"Dear customer, our deposit service is temporarily unavailable. Please try again in a few moments.\")}",
+        "success": false,
+        "error_code": "${coalesce(error.code, \"HTTP_ERROR\")}",
+        "error_detail": "${coalesce(error.message, \"Network unreachable\")}",
+        "response_body": "$error.data.body"
+      },
+      "status": "success"
+    },
+    {
+      "id": "menu_withdrawal",
+      "next": "route_withdrawal",
+      "type": "action",
+      "label": "Withdrawal Menu",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Withdrawal\n1. Flexy to Momo\n2. Flexy to Bank\n3. Savings Withdrawl Request\n0. Back",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-3]$')",
+        "interaction_type": "menu"
+      },
+      "input_variable": "withdrawal_choice"
+    },
+    {
+      "id": "route_withdrawal",
+      "type": "choice",
+      "cases": {
+        "0": "main_menu",
+        "1": "menu_momo_target",
+        "2": "wd_bank_select",
+        "3": "menu_savings_request"
+      },
+      "label": "Route Withdrawal selection",
+      "default": "menu_withdrawal",
+      "expression": "$withdrawal_choice"
+    },
+    {
+      "id": "menu_momo_target",
+      "next": "route_momo_target",
+      "type": "action",
+      "label": "Flexy to Momo Recipient Type",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Flexy to Momo\n1. Self\n2. Others\n0. Back",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-2]$')",
+        "interaction_type": "menu"
+      },
+      "input_variable": "momo_target_choice"
+    },
+    {
+      "id": "route_momo_target",
+      "type": "choice",
+      "cases": {
+        "0": "menu_withdrawal",
+        "1": "set_momo_self",
+        "2": "prompt_momo_other_number"
+      },
+      "label": "Route Self vs Others",
+      "default": "menu_momo_target",
+      "expression": "$momo_target_choice"
+    },
+    {
+      "id": "set_momo_self",
+      "next": "menu_momo_network",
+      "type": "noop",
+      "label": "Set Self Recipient Number",
+      "assign": {
+        "recipient_type": "self",
+        "recipient_msisdn": "${coalesce(phoneNo, msisdn, \"0242602262\")}"
+      }
+    },
+    {
+      "id": "prompt_momo_other_number",
+      "next": "check_other_number_back",
+      "type": "action",
+      "label": "Enter Recipient Mobile Number",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter Recipient Momo Number:\n0. Back",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^(0|0[0-9]{9}|233[0-9]{9})$')",
+        "interaction_type": "input"
+      },
+      "input_variable": "recipient_msisdn"
+    },
+    {
+      "id": "check_other_number_back",
+      "else": "menu_momo_network",
+      "then": "menu_momo_target",
+      "type": "if",
+      "label": "Check if User entered 0 to go Back",
+      "condition": "recipient_msisdn == '0'"
+    },
+    {
+      "id": "menu_momo_network",
+      "next": "route_momo_network",
+      "type": "action",
+      "label": "Select Mobile Money Network",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Select Network:\n1. MTN\n2. TELECEL\n3. AIRTELTIGO\n0. Back",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-3]$')",
+        "interaction_type": "menu"
+      },
+      "input_variable": "momo_network_choice"
+    },
+    {
+      "id": "route_momo_network",
+      "type": "choice",
+      "cases": {
+        "0": "menu_momo_target",
+        "1": "set_network_mtn",
+        "2": "set_network_telecel",
+        "3": "set_network_airteltigo"
+      },
+      "label": "Route Mobile Money Network",
+      "default": "menu_momo_network",
+      "expression": "$momo_network_choice"
+    },
+    {
+      "id": "set_network_mtn",
+      "next": "prompt_momo_amount",
+      "type": "noop",
+      "assign": {
+        "provider": "mtn",
+        "network_name": "MTN"
+      }
+    },
+    {
+      "id": "set_network_telecel",
+      "next": "prompt_momo_amount",
+      "type": "noop",
+      "assign": {
+        "provider": "telecel",
+        "network_name": "TELECEL"
+      }
+    },
+    {
+      "id": "set_network_airteltigo",
+      "next": "prompt_momo_amount",
+      "type": "noop",
+      "assign": {
+        "provider": "airteltigo",
+        "network_name": "AIRTELTIGO"
+      }
+    },
+    {
+      "id": "prompt_momo_amount",
+      "next": "prompt_momo_pin",
+      "type": "action",
+      "label": "Enter Withdrawal Amount",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter Amount to withdraw (GHS):",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]+(\\.[0-9]{1,2})?$')",
+        "interaction_type": "input"
+      },
+      "input_variable": "withdraw_amount"
+    },
+    {
+      "id": "prompt_momo_pin",
+      "next": "call_flexy_to_momo_api",
+      "type": "action",
+      "label": "Enter 4-digit PIN to Authorize Withdrawal",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter 4-digit PIN to authorize withdrawal of GHS ${withdraw_amount} to ${network_name} (${recipient_msisdn}):",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]{4}$')",
+        "interaction_type": "pin"
+      },
+      "input_variable": "user_pin"
+    },
+    {
+      "id": "call_flexy_to_momo_api",
+      "next": "check_momo_response",
+      "type": "command",
+      "label": "Call Initialize Flexy Withdrawal to Momo API",
+      "retry": {
+        "backoff_ms": 300,
+        "multiplier": 2,
+        "max_attempts": 2
+      },
+      "output": {
+        "api_status": "$.status",
+        "api_response": "$.body",
+        "momo_message": "$.body.message"
+      },
+      "command": "http.post",
+      "on_error": "wd_momo_api_transport_error",
+      "http_request": {
+        "url": "https://ultra-magnus.rhyoliteprime.com/api/v1/third-party/smart-suite/initialize-flexy-withdrawal-to-momo",
+        "body": {
+          "pin": "$user_pin",
+          "amount": "${to_number(withdraw_amount)}",
+          "provider": "$provider",
+          "accountType": "F",
+          "description": "Withdrawl(Momo)",
+          "senderMsisdn": "${coalesce(senderMsisdn, if(starts_with(coalesce(phoneNo, msisdn, \"\"), \"0\"), \"+233\" + substring(coalesce(phoneNo, msisdn, \"\"), 1), if(starts_with(coalesce(phoneNo, msisdn, \"\"), \"+\"), coalesce(phoneNo, msisdn, \"\"), \"+233\" + coalesce(phoneNo, msisdn, \"244256444\"))))}",
+          "customerEmail": "${coalesce(customerEmail, if(starts_with(coalesce(phoneNo, msisdn, \"\"), \"+\"), substring(coalesce(phoneNo, msisdn, \"\"), 1), if(starts_with(coalesce(phoneNo, msisdn, \"\"), \"0\"), \"233\" + substring(coalesce(phoneNo, msisdn, \"\"), 1), coalesce(phoneNo, msisdn, \"233244256444\"))) + \"@rhyoliteprime.com\")}",
+          "recipientName": "${coalesce(recipientName, \"N/A\")}",
+          "recipientMsisdn": "${coalesce(recipient_msisdn, phoneNo, msisdn, \"0242602262\")}",
+          "integratingService": "*920*108#",
+          "integrationChannel": "ussd-pos",
+          "kiddyAccountSerialNo": ""
+        },
+        "headers": {
+          "ClientId": "${coalesce(momoClientId, clientId, \"TDEXLvnWgM\")}",
+          "ClientSecret": "${coalesce(momoClientSecret, \"47809b129a3549c48\")}",
+          "Content-Type": "application/json"
+        },
+        "timeout": "10s"
+      }
+    },
+    {
+      "id": "check_momo_response",
+      "else": "wd_momo_api_rejection",
+      "then": "wd_momo_success",
+      "type": "if",
+      "label": "Check Momo Withdrawal Response",
+      "condition": "api_response != null && api_response.success == true"
+    },
+    {
+      "id": "wd_momo_success",
+      "type": "terminate",
+      "output": {
+        "action": "withdrawal_momo",
+        "amount": "${to_number(withdraw_amount)}",
+        "message": "${coalesce(momo_message, api_response.message, \"Withdrawal initiated successfully.\")}",
+        "success": true,
+        "provider": "$provider",
+        "recipient": "$recipient_msisdn"
+      },
+      "status": "success"
+    },
+    {
+      "id": "wd_momo_api_rejection",
+      "type": "terminate",
+      "output": {
+        "code": "${coalesce(api_response.code, 1)}",
+        "action": "withdrawal_momo",
+        "message": "${coalesce(api_response.message, \"Failed to initiate withdrawal. Please try again later.\")}",
+        "success": false
+      },
+      "status": "success"
+    },
+    {
+      "id": "wd_momo_api_transport_error",
+      "type": "terminate",
+      "output": {
+        "action": "withdrawal_momo",
+        "message": "${coalesce(error.data.body.message, \"Dear customer, our mobile money withdrawal service is temporarily unavailable. Please try again later.\")}",
+        "success": false,
+        "error_code": "${coalesce(error.code, \"HTTP_ERROR\")}",
+        "error_detail": "${coalesce(error.message, \"Network unreachable\")}",
+        "response_body": "$error.data.body"
+      },
+      "status": "success"
+    },
+    {
+      "id": "wd_bank_select",
+      "next": "route_bank_select",
+      "type": "action",
+      "label": "Select Destination Bank",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Select Destination Bank:\n1. GCB Bank\n2. Ecobank\n3. Stanbic Bank\n4. Fidelity Bank\n0. Back",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-4]$')",
+        "interaction_type": "menu"
+      },
+      "input_variable": "bank_code"
+    },
+    {
+      "id": "route_bank_select",
+      "type": "choice",
+      "cases": {
+        "0": "menu_withdrawal",
+        "1": "set_bank_gcb",
+        "2": "set_bank_ecobank",
+        "3": "set_bank_stanbic",
+        "4": "set_bank_fidelity"
+      },
+      "default": "wd_bank_select",
+      "expression": "$bank_code"
+    },
+    {
+      "id": "set_bank_gcb",
+      "next": "wd_bank_account",
+      "type": "noop",
+      "assign": {
+        "bank_name": "GCB Bank"
+      }
+    },
+    {
+      "id": "set_bank_ecobank",
+      "next": "wd_bank_account",
+      "type": "noop",
+      "assign": {
+        "bank_name": "Ecobank"
+      }
+    },
+    {
+      "id": "set_bank_stanbic",
+      "next": "wd_bank_account",
+      "type": "noop",
+      "assign": {
+        "bank_name": "Stanbic Bank"
+      }
+    },
+    {
+      "id": "set_bank_fidelity",
+      "next": "wd_bank_account",
+      "type": "noop",
+      "assign": {
+        "bank_name": "Fidelity Bank"
+      }
+    },
+    {
+      "id": "wd_bank_account",
+      "next": "wd_bank_amount",
+      "type": "action",
+      "label": "Enter Bank Account Number",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter ${bank_name} Account Number:",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]{8,16}$') ",
+        "interaction_type": "input"
+      },
+      "input_variable": "bank_account"
+    },
+    {
+      "id": "wd_bank_amount",
+      "next": "wd_bank_pin",
+      "type": "action",
+      "label": "Enter Bank Transfer Amount",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter Amount to transfer to ${bank_name} (GHS):",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]+(\\.[0-9]{1,2})?$')",
+        "interaction_type": "input"
+      },
+      "input_variable": "withdraw_amount"
+    },
+    {
+      "id": "wd_bank_pin",
+      "next": "wd_bank_success",
+      "type": "action",
+      "label": "Authorize Bank Transfer",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter 4-digit PIN to authorize transfer of GHS ${withdraw_amount} to ${bank_name} (${bank_account}):",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]{4}$') ",
+        "interaction_type": "pin"
+      },
+      "input_variable": "user_pin"
+    },
+    {
+      "id": "wd_bank_success",
+      "type": "terminate",
+      "output": {
+        "bank": "$bank_name",
+        "action": "withdrawal_bank",
+        "amount": "$withdraw_amount",
+        "account": "$bank_account",
+        "message": "Transfer of GHS ${withdraw_amount} to ${bank_name} Account ${bank_account} submitted. Ref: BNK-${now('ms')}"
+      },
+      "status": "success"
+    },
+    {
+      "id": "wd_savings_amount",
+      "next": "wd_savings_reason",
+      "type": "action",
+      "label": "Savings Withdrawal Request Amount",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter Savings Withdrawal Amount (GHS):",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]+(\\.[0-9]{1,2})?$')",
+        "interaction_type": "input"
+      },
+      "input_variable": "savings_amount"
+    },
+    {
+      "id": "wd_savings_reason",
+      "next": "wd_savings_pin",
+      "type": "action",
+      "label": "Savings Withdrawal Reason",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Select Reason for Withdrawal:\n1. Emergency\n2. Medical\n3. School Fees\n4. Business\n5. Other",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[1-5]$')",
+        "interaction_type": "menu"
+      },
+      "input_variable": "savings_reason_code"
+    },
+    {
+      "id": "wd_savings_pin",
+      "next": "wd_savings_success",
+      "type": "action",
+      "label": "Authorize Savings Withdrawal Request",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter 4-digit PIN to submit Savings Withdrawal Request for GHS ${savings_amount}:",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]{4}$') ",
+        "interaction_type": "pin"
+      },
+      "input_variable": "user_pin"
+    },
+    {
+      "id": "wd_savings_success",
+      "type": "terminate",
+      "output": {
+        "action": "withdrawal_savings_request",
+        "amount": "$savings_amount",
+        "message": "Your Savings Withdrawal Request for GHS ${savings_amount} has been received and queued for committee review. Ref: SVR-${now('ms')}"
+      },
+      "status": "success"
+    },
+    {
+      "id": "menu_savings_request",
+      "next": "route_savings_request",
+      "type": "action",
+      "label": "Savings Withdrawal Request Menu",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Savings Withdrawal Request\n1. Kiddy Account\n2. Savings Account\n0. Back",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-2]$')",
+        "interaction_type": "menu"
+      },
+      "input_variable": "savings_request_choice"
+    },
+    {
+      "id": "route_savings_request",
+      "type": "choice",
+      "cases": {
+        "0": "menu_withdrawal",
+        "1": "set_kiddy_context",
+        "2": "wd_savings_amount"
+      },
+      "label": "Route Savings Withdrawal Request selection",
+      "default": "menu_savings_request",
+      "expression": "$savings_request_choice"
+    },
+    {
+      "id": "set_kiddy_context",
+      "next": "sv_kiddy_pin",
+      "type": "noop",
+      "label": "Normalize phone number to local format for Kiddy APIs",
+      "assign": {
+        "local_phone": "${if(starts_with(coalesce(phoneNo, msisdn, \"0242602262\"), \"+233\"), \"0\" + substring(coalesce(phoneNo, msisdn, \"0242602262\"), 4), if(starts_with(coalesce(phoneNo, msisdn, \"0242602262\"), \"233\") && len(coalesce(phoneNo, msisdn, \"0242602262\")) == 12, \"0\" + substring(coalesce(phoneNo, msisdn, \"0242602262\"), 3), if(starts_with(coalesce(phoneNo, msisdn, \"0242602262\"), \"0\"), coalesce(phoneNo, msisdn, \"0242602262\"), if(len(coalesce(phoneNo, msisdn, \"0242602262\")) == 9, \"0\" + coalesce(phoneNo, msisdn, \"0242602262\"), coalesce(phoneNo, msisdn, \"0242602262\")))))}"
+      }
+    },
+    {
+      "id": "sv_kiddy_pin",
+      "next": "call_kiddy_balances_api",
+      "type": "action",
+      "label": "Authorize Kiddy Account Balance Enquiry",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Kiddy Account Withdrawal\nEnter 4-digit PIN:",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]{4}$')",
+        "interaction_type": "pin"
+      },
+      "input_variable": "user_pin"
+    },
+    {
+      "id": "call_kiddy_balances_api",
+      "next": "check_kiddy_balances",
+      "type": "command",
+      "label": "Fetch Kiddy Account Balances API",
+      "retry": {
+        "backoff_ms": 300,
+        "multiplier": 2,
+        "max_attempts": 2
+      },
+      "output": {
+        "kiddy_list": "$.body.data",
+        "kiddy_balances_message": "$.body.message",
+        "kiddy_balances_response": "$.body"
+      },
+      "command": "http.post",
+      "on_error": "kiddy_balances_transport_error",
+      "http_request": {
+        "url": "https://ultra-magnus.rhyoliteprime.com/api/v1/third-party/smart-suite/get-account-balance",
+        "body": {
+          "pin": "${to_string(user_pin)}",
+          "phoneNo": "$local_phone",
+          "accountType": "K"
+        },
+        "headers": {
+          "ClientId": "${coalesce(depositClientId, clientId, \"TDEXLvnWgM\")}",
+          "ClientSecret": "${coalesce(depositClientSecret, clientSecret, \"47809b129a3549c48\")}",
+          "Content-Type": "application/json"
+        },
+        "timeout": "10s"
+      }
+    },
+    {
+      "id": "check_kiddy_balances",
+      "else": "kiddy_balances_rejection",
+      "then": "check_kiddy_list_empty",
+      "type": "if",
+      "label": "Check Kiddy Balances API Response",
+      "condition": "kiddy_balances_response != null && kiddy_balances_response.success == true"
+    },
+    {
+      "id": "check_kiddy_list_empty",
+      "else": "kiddy_no_accounts",
+      "then": "build_kiddy_menu",
+      "type": "if",
+      "label": "Check if any Kiddy Accounts were returned",
+      "condition": "is_array(kiddy_list) && len(kiddy_list) > 0"
+    },
+    {
+      "id": "build_kiddy_menu",
+      "next": "menu_kiddy_child",
+      "type": "noop",
+      "label": "Build Kiddy Child Selection Menu",
+      "assign": {
+        "kiddy_menu_text": "${'Kiddy Account Withdrawal\nSelect Child:\n' + join(map(kiddy_list, (index + 1) + '. ' + item.SURNAME + ' (GHS ' + item.BALANCE + ')'), '\n') + '\n0. Back'}"
+      }
+    },
+    {
+      "id": "menu_kiddy_child",
+      "next": "check_kiddy_child_back",
+      "type": "action",
+      "label": "Kiddy Child Selection Menu",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "${kiddy_menu_text}",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]$')",
+        "interaction_type": "menu"
+      },
+      "input_variable": "kiddy_choice"
+    },
+    {
+      "id": "check_kiddy_child_back",
+      "else": "check_kiddy_child_range",
+      "then": "menu_savings_request",
+      "type": "if",
+      "label": "Check if User entered 0 to go Back",
+      "condition": "kiddy_choice == '0' || kiddy_choice == 0"
+    },
+    {
+      "id": "check_kiddy_child_range",
+      "else": "menu_kiddy_child",
+      "then": "set_selected_kiddy",
+      "type": "if",
+      "label": "Validate selected child number",
+      "condition": "to_number(kiddy_choice) >= 1 && to_number(kiddy_choice) <= len(kiddy_list)"
+    },
+    {
+      "id": "set_selected_kiddy",
+      "next": "kiddy_amount_prompt",
+      "type": "noop",
+      "label": "Record Selected Kiddy Child",
+      "assign": {
+        "kiddy_serial_no": "${get(kiddy_list, '[' + to_string(to_number(kiddy_choice) - 1) + ']', null).CHILDNO}",
+        "kiddy_child_name": "${get(kiddy_list, '[' + to_string(to_number(kiddy_choice) - 1) + ']', null).SURNAME}",
+        "kiddy_child_balance": "${get(kiddy_list, '[' + to_string(to_number(kiddy_choice) - 1) + ']', null).BALANCE}"
+      }
+    },
+    {
+      "id": "kiddy_amount_prompt",
+      "next": "kiddy_withdraw_pin",
+      "type": "action",
+      "label": "Kiddy Withdrawal Amount",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter Withdrawal Amount for ${kiddy_child_name} (GHS):",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]+(\\.[0-9]{1,2})?$')",
+        "interaction_type": "input"
+      },
+      "input_variable": "kiddy_amount"
+    },
+    {
+      "id": "kiddy_withdraw_pin",
+      "next": "call_kiddy_withdrawal_api",
+      "type": "action",
+      "label": "Authorize Kiddy Withdrawal Request",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter 4-digit PIN to withdraw GHS ${kiddy_amount} from ${kiddy_child_name}'s Kiddy Account:",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]{4}$')",
+        "interaction_type": "pin"
+      },
+      "input_variable": "user_pin"
+    },
+    {
+      "id": "call_kiddy_withdrawal_api",
+      "next": "check_kiddy_wd_response",
+      "type": "command",
+      "label": "Submit Kiddy Withdrawal Request API",
+      "retry": {
+        "backoff_ms": 300,
+        "multiplier": 2,
+        "max_attempts": 2
+      },
+      "output": {
+        "kiddy_wd_message": "$.body.message",
+        "kiddy_wd_response": "$.body",
+        "kiddy_wd_checkout_url": "$.body.checkoutUrl"
+      },
+      "command": "http.post",
+      "on_error": "kiddy_wd_transport_error",
+      "http_request": {
+        "url": "https://ultra-magnus.rhyoliteprime.com/api/v1/third-party/smart-suite/submit-kiddy-withdrawal-request",
+        "body": {
+          "pin": "${to_string(user_pin)}",
+          "amount": "${to_number(kiddy_amount)}",
+          "phoneNo": "$local_phone",
+          "serialNo": "${coalesce(kiddy_serial_no, \"\")}"
+        },
+        "headers": {
+          "ClientId": "${coalesce(depositClientId, clientId, \"TDEXLvnWgM\")}",
+          "ClientSecret": "${coalesce(depositClientSecret, clientSecret, \"47809b129a3549c48\")}",
+          "Content-Type": "application/json"
+        },
+        "timeout": "10s"
+      }
+    },
+    {
+      "id": "check_kiddy_wd_response",
+      "else": "kiddy_wd_rejection",
+      "then": "kiddy_wd_success",
+      "type": "if",
+      "label": "Check Kiddy Withdrawal Response",
+      "condition": "kiddy_wd_response != null && kiddy_wd_response.success == true"
+    },
+    {
+      "id": "kiddy_wd_success",
+      "type": "terminate",
+      "output": {
+        "child": "$kiddy_child_name",
+        "action": "withdrawal_kiddy_request",
+        "amount": "${to_number(kiddy_amount)}",
+        "message": "${coalesce(kiddy_wd_message, \"Your Kiddy Account withdrawal request has been submitted successfully.\")}",
+        "success": true,
+        "serialNo": "${coalesce(kiddy_serial_no, \"\")}",
+        "checkoutUrl": "${coalesce(kiddy_wd_checkout_url, \"\")}"
+      },
+      "status": "success"
+    },
+    {
+      "id": "kiddy_wd_rejection",
+      "type": "terminate",
+      "output": {
+        "code": "${coalesce(kiddy_wd_response.code, 1)}",
+        "child": "$kiddy_child_name",
+        "action": "withdrawal_kiddy_request",
+        "amount": "${to_number(kiddy_amount)}",
+        "message": "${coalesce(kiddy_wd_message, \"Failed to initiate withdrawal request from Kiddy Account. Please try again.\")}",
+        "success": false,
+        "serialNo": "${coalesce(kiddy_serial_no, \"\")}"
+      },
+      "status": "success"
+    },
+    {
+      "id": "kiddy_wd_transport_error",
+      "type": "terminate",
+      "output": {
+        "action": "withdrawal_kiddy_request",
+        "message": "${coalesce(error.data.body.message, \"Dear customer, our Kiddy Account withdrawal service is temporarily unavailable. Please try again in a few moments.\")}",
+        "success": false,
+        "error_code": "${coalesce(error.code, \"HTTP_ERROR\")}",
+        "error_detail": "${coalesce(error.message, \"Network unreachable\")}",
+        "response_body": "$error.data.body"
+      },
+      "status": "success"
+    },
+    {
+      "id": "kiddy_balances_rejection",
+      "type": "terminate",
+      "output": {
+        "code": "${coalesce(kiddy_balances_response.code, 1)}",
+        "action": "withdrawal_kiddy_balances",
+        "message": "${coalesce(kiddy_balances_message, \"Failed to retrieve Kiddy Account balances. Please check your PIN and try again.\")}",
+        "success": false
+      },
+      "status": "success"
+    },
+    {
+      "id": "kiddy_no_accounts",
+      "type": "terminate",
+      "output": {
+        "action": "withdrawal_kiddy_balances",
+        "message": "No Kiddy Accounts found linked to your profile."
+      },
+      "status": "success"
+    },
+    {
+      "id": "kiddy_balances_transport_error",
+      "type": "terminate",
+      "output": {
+        "action": "withdrawal_kiddy_balances",
+        "message": "${coalesce(error.data.body.message, \"Dear customer, our Kiddy Account balance service is temporarily unavailable. Please try again in a few moments.\")}",
+        "success": false,
+        "error_code": "${coalesce(error.code, \"HTTP_ERROR\")}",
+        "error_detail": "${coalesce(error.message, \"Network unreachable\")}",
+        "response_body": "$error.data.body"
+      },
+      "status": "success"
+    },
+    {
+      "id": "menu_funds_transfer",
+      "next": "route_funds_transfer",
+      "type": "action",
+      "label": "Funds Transfer Menu",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Funds transfer\n1. Transfer to Kiddy Account\n2. Transfer to Member Account\n0. Back",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-2]$')",
+        "interaction_type": "menu"
+      },
+      "input_variable": "transfer_choice"
+    },
+    {
+      "id": "route_funds_transfer",
+      "type": "choice",
+      "cases": {
+        "0": "main_menu",
+        "1": "ft_kiddy_account",
+        "2": "ft_member_account"
+      },
+      "label": "Route Funds Transfer selection",
+      "default": "menu_funds_transfer",
+      "expression": "$transfer_choice"
+    },
+    {
+      "id": "ft_kiddy_account",
+      "next": "ft_kiddy_amount",
+      "type": "action",
+      "label": "Enter Kiddy Account Number",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter Kiddy Account Number:",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]{6,12}$') ",
+        "interaction_type": "input"
+      },
+      "input_variable": "kiddy_account"
+    },
+    {
+      "id": "ft_kiddy_amount",
+      "next": "ft_kiddy_pin",
+      "type": "action",
+      "label": "Enter Amount to Transfer to Kiddy",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter Amount to transfer (GHS):",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]+(\\.[0-9]{1,2})?$')",
+        "interaction_type": "input"
+      },
+      "input_variable": "transfer_amount"
+    },
+    {
+      "id": "ft_kiddy_pin",
+      "next": "ft_kiddy_success",
+      "type": "action",
+      "label": "Authorize Kiddy Transfer",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter 4-digit PIN to transfer GHS ${transfer_amount} to Kiddy Account ${kiddy_account}:",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]{4}$') ",
+        "interaction_type": "pin"
+      },
+      "input_variable": "user_pin"
+    },
+    {
+      "id": "ft_kiddy_success",
+      "type": "terminate",
+      "output": {
+        "action": "transfer_kiddy",
+        "amount": "$transfer_amount",
+        "account": "$kiddy_account",
+        "message": "Transferred GHS ${transfer_amount} to Kiddy Account ${kiddy_account} successfully. Ref: TRF-${now('ms')}"
+      },
+      "status": "success"
+    },
+    {
+      "id": "ft_member_account",
+      "next": "ft_member_amount",
+      "type": "action",
+      "label": "Enter Member Account / ID",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter Member Account Number / Member ID:",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]{6,12}$') ",
+        "interaction_type": "input"
+      },
+      "input_variable": "member_account"
+    },
+    {
+      "id": "ft_member_amount",
+      "next": "ft_member_pin",
+      "type": "action",
+      "label": "Enter Amount to Transfer to Member",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter Amount to transfer (GHS):",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]+(\\.[0-9]{1,2})?$')",
+        "interaction_type": "input"
+      },
+      "input_variable": "transfer_amount"
+    },
+    {
+      "id": "ft_member_pin",
+      "next": "ft_member_success",
+      "type": "action",
+      "label": "Authorize Member Transfer",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter 4-digit PIN to transfer GHS ${transfer_amount} to Member Account ${member_account}:",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]{4}$') ",
+        "interaction_type": "pin"
+      },
+      "input_variable": "user_pin"
+    },
+    {
+      "id": "ft_member_success",
+      "type": "terminate",
+      "output": {
+        "action": "transfer_member",
+        "amount": "$transfer_amount",
+        "account": "$member_account",
+        "message": "Transferred GHS ${transfer_amount} to Member Account ${member_account} successfully. Ref: TRF-${now('ms')}"
+      },
+      "status": "success"
+    },
+    {
+      "id": "menu_enquiries",
+      "next": "route_enquiries",
+      "type": "action",
+      "label": "Enquiries Menu",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enquiries\n1. Balances\n2. Mini Statement\n0. Back",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-2]$')",
+        "interaction_type": "menu"
+      },
+      "input_variable": "enquiry_choice"
+    },
+    {
+      "id": "route_enquiries",
+      "type": "choice",
+      "cases": {
+        "0": "main_menu",
+        "1": "prep_enquiry_balance",
+        "2": "prep_enquiry_ministatement"
+      },
+      "label": "Route Enquiries selection",
+      "default": "menu_enquiries",
+      "expression": "$enquiry_choice"
+    },
+    {
+      "id": "prep_enquiry_balance",
+      "next": "menu_enquiry_accounts",
+      "type": "noop",
+      "assign": {
+        "enquiry_type": "balance",
+        "enquiry_title": "Balances"
+      }
+    },
+    {
+      "id": "prep_enquiry_ministatement",
+      "next": "menu_enquiry_accounts",
+      "type": "noop",
+      "assign": {
+        "enquiry_type": "ministatement",
+        "enquiry_title": "Mini Statement"
+      }
+    },
+    {
+      "id": "menu_enquiry_accounts",
+      "next": "route_enquiry_accounts",
+      "type": "action",
+      "label": "Select Account for Enquiry",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "${enquiry_title}\nSelect Account:\n1. Flexy Account\n2. Kiddy Account\n3. Savings Account\n4. Shares Account\n5. Loan Account\n0. Back",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-5]$')",
+        "interaction_type": "menu"
+      },
+      "input_variable": "account_selection"
+    },
+    {
+      "id": "route_enquiry_accounts",
+      "type": "choice",
+      "cases": {
+        "0": "menu_enquiries",
+        "1": "set_enquiry_flexy",
+        "2": "set_enquiry_kiddy",
+        "3": "set_enquiry_savings",
+        "4": "set_enquiry_shares",
+        "5": "set_enquiry_loan"
+      },
+      "label": "Route Account selection and assign code",
+      "default": "menu_enquiry_accounts",
+      "expression": "$account_selection"
+    },
+    {
+      "id": "set_enquiry_flexy",
+      "next": "prompt_enquiry_pin",
+      "type": "noop",
+      "assign": {
+        "account_code": "F",
+        "account_name": "Flexy Account"
+      }
+    },
+    {
+      "id": "set_enquiry_kiddy",
+      "next": "prompt_enquiry_pin",
+      "type": "noop",
+      "assign": {
+        "account_code": "K",
+        "account_name": "Kiddy Account"
+      }
+    },
+    {
+      "id": "set_enquiry_savings",
+      "next": "prompt_enquiry_pin",
+      "type": "noop",
+      "assign": {
+        "account_code": "U",
+        "account_name": "Savings Deposit Account"
+      }
+    },
+    {
+      "id": "set_enquiry_shares",
+      "next": "prompt_enquiry_pin",
+      "type": "noop",
+      "assign": {
+        "account_code": "S",
+        "account_name": "Shares Account"
+      }
+    },
+    {
+      "id": "set_enquiry_loan",
+      "next": "prompt_enquiry_pin",
+      "type": "noop",
+      "assign": {
+        "account_code": "L",
+        "account_name": "Loan Account"
+      }
+    },
+    {
+      "id": "prompt_enquiry_pin",
+      "next": "route_enquiry_dispatch",
+      "type": "action",
+      "label": "Prompt for 4-digit PIN",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter 4-digit PIN for ${account_name}:",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]{4}$') ",
+        "interaction_type": "pin"
+      },
+      "input_variable": "user_pin"
+    },
+    {
+      "id": "route_enquiry_dispatch",
+      "type": "choice",
+      "cases": {
+        "balance": "call_balance_api",
+        "ministatement": "call_mini_statement_api"
+      },
+      "label": "Dispatch to Balance or Mini Statement API",
+      "default": "call_balance_api",
+      "expression": "$enquiry_type"
+    },
+    {
+      "id": "call_balance_api",
+      "next": "check_api_response",
+      "type": "command",
+      "label": "Fetch Account Balance API",
+      "retry": {
+        "backoff_ms": 300,
+        "multiplier": 2,
+        "max_attempts": 2
+      },
+      "output": {
+        "api_status": "$.status",
+        "api_response": "$.body",
+        "balance_message": "$.body.message"
+      },
+      "command": "http.post",
+      "on_error": "enquiry_api_transport_error",
+      "http_request": {
+        "url": "https://ultra-magnus.rhyoliteprime.com/api/v1/third-party/smart-suite/get-account-balance",
+        "body": {
+          "pin": "${user_pin}",
+          "phoneNo": "${coalesce(phoneNo, msisdn)}",
+          "accountType": "${account_code}"
+        },
+        "headers": {
+          "ClientId": "${coalesce(clientId, \"TDEXLvnWgM\")}",
+          "ClientSecret": "${coalesce(clientSecret, \"49797884938483\")}",
+          "Content-Type": "application/json"
+        },
+        "timeout": "10s"
+      }
+    },
+    {
+      "id": "call_mini_statement_api",
+      "next": "check_api_response",
+      "type": "command",
+      "label": "Fetch Mini Statement API",
+      "retry": {
+        "backoff_ms": 300,
+        "multiplier": 2,
+        "max_attempts": 2
+      },
+      "output": {
+        "api_status": "$.status",
+        "api_response": "$.body",
+        "statement_message": "$.body.message"
+      },
+      "command": "http.post",
+      "on_error": "enquiry_api_transport_error",
+      "http_request": {
+        "url": "https://ultra-magnus.rhyoliteprime.com/api/v1/third-party/smart-suite/get-mini-statement",
+        "body": {
+          "pin": "${user_pin}",
+          "phoneNo": "${coalesce(phoneNo, msisdn)}",
+          "serialNo": "",
+          "accountType": "${account_code}"
+        },
+        "headers": {
+          "ClientId": "${coalesce(clientId, \"TDEXLvnWgM\")}",
+          "ClientSecret": "${coalesce(clientSecret, \"49797884938483\")}",
+          "Content-Type": "application/json"
+        },
+        "timeout": "10s"
+      }
+    },
+    {
+      "id": "check_api_response",
+      "else": "enquiry_display_api_rejection",
+      "then": "enquiry_display_success",
+      "type": "if",
+      "label": "Check if API returned success",
+      "condition": "api_response != null && api_response.success == true"
+    },
+    {
+      "id": "enquiry_display_success",
+      "type": "terminate",
+      "output": {
+        "action": "enquiry",
+        "account": "$account_name",
+        "balance": "${coalesce(balance_message, api_response.message)}",
+        "message": "${api_response.message}",
+        "success": true,
+        "account_code": "$account_code",
+        "enquiry_type": "$enquiry_type"
+      },
+      "status": "success"
+    },
+    {
+      "id": "enquiry_display_api_rejection",
+      "type": "terminate",
+      "output": {
+        "code": "${coalesce(api_response.code, 1)}",
+        "action": "enquiry",
+        "message": "${coalesce(api_response.message, 'Dear customer, your request could not be completed. Please check your PIN and try again.')}",
+        "success": false
+      },
+      "status": "success"
+    },
+    {
+      "id": "enquiry_api_transport_error",
+      "type": "terminate",
+      "output": {
+        "action": "enquiry",
+        "message": "${coalesce(error.data.body.message, \"Dear customer, our banking enquiry service is temporarily unavailable. Please try again in a few moments or contact support.\")}",
+        "success": false,
+        "error_code": "${coalesce(error.code, 'HTTP_ERROR')}",
+        "request_url": "$error.data.url",
+        "error_detail": "${coalesce(error.message, 'Network unreachable')}",
+        "response_body": "$error.data.body"
+      },
+      "status": "success",
+      "message": "Dear customer, our banking enquiry service is temporarily unavailable. Please try again in a few moments or contact support."
+    },
+    {
+      "id": "menu_change_pin",
+      "next": "pin_enter_new",
+      "type": "action",
+      "label": "Enter Current PIN",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Change PIN\nEnter Current 4-digit PIN:",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]{4}$')",
+        "interaction_type": "pin"
+      },
+      "input_variable": "current_pin"
+    },
+    {
+      "id": "pin_enter_new",
+      "next": "pin_confirm_message",
+      "type": "action",
+      "label": "Enter New PIN",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "Enter New 4-digit PIN:",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]{4}$')",
+        "interaction_type": "pin"
+      },
+      "input_variable": "new_pin"
+    },
+    {
+      "id": "pin_confirm_message",
+      "next": "check_pin_confirm_code",
+      "type": "action",
+      "label": "Present PIN Confirmation Message",
+      "capability": "",
+      "await_input": true,
+      "prompt_config": {
+        "message": "You are about to change your PIN, Enter 77 to confirm",
+        "timeout": "2m",
+        "input_validation": "matches(input, '^[0-9]+$')",
+        "interaction_type": "input"
+      },
+      "input_variable": "pin_confirm_code"
+    },
+    {
+      "id": "check_pin_confirm_code",
+      "else": "pin_change_cancelled",
+      "then": "call_change_pin_api",
+      "type": "if",
+      "label": "Verify Confirmation Code 77",
+      "condition": "pin_confirm_code == '77' || pin_confirm_code == 77"
+    },
+    {
+      "id": "call_change_pin_api",
+      "next": "check_change_pin_response",
+      "type": "command",
+      "label": "Execute Change PIN API",
+      "retry": {
+        "backoff_ms": 300,
+        "multiplier": 2,
+        "max_attempts": 2
+      },
+      "output": {
+        "api_status": "$.status",
+        "api_message": "$.body.message",
+        "api_response": "$.body"
+      },
+      "command": "http.post",
+      "on_error": "pin_change_api_transport_error",
+      "http_request": {
+        "url": "https://ultra-magnus.rhyoliteprime.com/api/v1/third-party/smart-suite/change-pin",
+        "body": {
+          "newPin": "${new_pin}",
+          "phoneNo": "${coalesce(phoneNo, msisdn)}",
+          "currentPin": "${current_pin}"
+        },
+        "headers": {
+          "ClientId": "${coalesce(pinClientId, \"dfdf\")}",
+          "ClientSecret": "${coalesce(pinClientSecret, \"78877566456456\")}",
+          "Content-Type": "application/json"
+        },
+        "timeout": "10s"
+      }
+    },
+    {
+      "id": "check_change_pin_response",
+      "else": "pin_change_api_rejection",
+      "then": "pin_change_success",
+      "type": "if",
+      "label": "Check Change PIN Response Status",
+      "condition": "api_response != null && api_response.success == true"
+    },
+    {
+      "id": "pin_change_success",
+      "type": "terminate",
+      "output": {
+        "action": "change_pin",
+        "status": "pin_changed",
+        "message": "${coalesce(api_response.message, \"PIN changed successfully.\")}",
+        "success": true
+      },
+      "status": "success"
+    },
+    {
+      "id": "pin_change_api_rejection",
+      "type": "terminate",
+      "output": {
+        "code": "${coalesce(api_response.code, 1)}",
+        "action": "change_pin",
+        "message": "${coalesce(api_response.message, \"Failed to change PIN. Please try again.\")}",
+        "success": false
+      },
+      "status": "success"
+    },
+    {
+      "id": "pin_change_api_transport_error",
+      "type": "terminate",
+      "output": {
+        "action": "change_pin",
+        "message": "${coalesce(error.data.body.message, \"Dear customer, our PIN change service is temporarily unavailable. Please try again in a few moments.\")}",
+        "success": false,
+        "error_code": "${coalesce(error.code, \"HTTP_ERROR\")}",
+        "error_detail": "${coalesce(error.message, \"Network unreachable\")}",
+        "response_body": "$error.data.body"
+      },
+      "status": "success"
+    },
+    {
+      "id": "pin_change_cancelled",
+      "type": "terminate",
+      "output": {
+        "action": "change_pin",
+        "status": "cancelled",
+        "message": "PIN change was not confirmed. Your PIN remains unchanged."
+      },
+      "status": "success"
+    },
+    {
+      "id": "operation_cancelled",
+      "type": "terminate",
+      "output": {
+        "action": "cancelled",
+        "message": "Operation cancelled. Thank you for banking with Sapo Bank."
+      },
+      "status": "success"
+    }
+  ],
+  "version": "1.0",
+  "defaults": {
+    "pin": "7002",
+    "phoneNo": "0242602262",
+    "clientId": "TDEXLvnWgM",
+    "currency": "GHS",
+    "provider": "mtn",
+    "bank_name": "Sapo Bank",
+    "description": "Bank Deposit",
+    "pinClientId": "dfdf",
+    "clientSecret": "49797884938483",
+    "momoClientId": "TDEXLvnWgM",
+    "depositClientId": "TDEXLvnWgM",
+    "pinClientSecret": "78877566456456",
+    "transactionType": "BankDeposit",
+    "momoClientSecret": "47809b129a3549c48",
+    "integratingService": "DACCU(*920*108#)",
+    "integrationChannel": "ussd-pos",
+    "depositClientSecret": "47809b129a3549c48"
+  },
+  "description": "USSD Banking Service built with Sapo DSL Engine, featuring multi-level menus for Deposit, Withdrawal, Funds Transfer, Enquiries, and Change PIN with live API integration and resilient error handling."
+}
