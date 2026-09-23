@@ -47,8 +47,10 @@ class SapoEngineService {
     bool configure(const SapoSettings &settings);
 
     /// Loads blueprints, runs the startup audit and starts the background
-    /// scheduler tick. Returns an empty vector when the engine is ready;
-    /// any entry is a problem that must be fixed (callers log them).
+    /// scheduler tick. Returns the *fatal* problems (empty = ready); engine
+    /// warnings (validator WARNINGs such as control-flow cycle reports) are
+    /// logged and tolerated, matching the engine itself, which marks the VM
+    /// started regardless. Callers log every returned entry as an error.
     std::vector<std::string> start();
 
     /// Stops the scheduler tick and the engine. Safe to call repeatedly.
@@ -60,6 +62,14 @@ class SapoEngineService {
 
     [[nodiscard]] const SapoSettings &settings() const {
         return settings_;
+    }
+
+    /// Start-problem severity: VirtualMachine::start() returns validator
+    /// warnings (cycle reports, unused-field notes) in the same vector as
+    /// fatal errors, distinguished only by a "WARNING" tag in the text.
+    /// Inline so unit tests can cover the contract without linking the engine.
+    static bool isWarningProblem(const std::string &problem) {
+        return problem.find("WARNING") != std::string::npos;
     }
 
     [[nodiscard]] bool hasWorkflow(const std::string &workflowId) const;

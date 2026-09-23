@@ -7,6 +7,7 @@
 #include "runtime/VirtualMachine.hpp"
 
 #include "domain_services/sapo/ProviderAdapters.h"
+#include "domain_services/sapo/SapoEngineService.h"
 #include "utils/JsonBridge.h"
 
 using namespace wssd_api::sapo_host;
@@ -164,4 +165,15 @@ DROGON_TEST(JsonBridgeRoundTrip) {
     CHECK(back["nil"].isNull());
     CHECK(back["arr"][0].asString() == "x");
     CHECK(back["obj"]["nested"].asInt() == 7);
+}
+
+DROGON_TEST(SapoStartProblemSeverity) {
+    // Validator warnings are tolerated at startup; everything else is fatal.
+    CHECK(SapoEngineService::isWarningProblem(
+        "workflow 'default': WARNING [main_menu] control-flow cycle: main_menu → route_choice"));
+    CHECK(!SapoEngineService::isWarningProblem(
+        "config: engine.state_redis must be a non-empty redis:// URL string"));
+    CHECK(!SapoEngineService::isWarningProblem("config: cannot open config file 'x'"));
+    CHECK(!SapoEngineService::isWarningProblem("sapo engine is not configured"));
+    CHECK(!SapoEngineService::isWarningProblem(""));
 }
