@@ -31,6 +31,7 @@ std::string serialize(const UssdFlowBinding &binding) {
                           {"blueprint_json", binding.blueprintJson},
                           {"service_key", binding.serviceKey},
                           {"dial_code", binding.dialCode},
+                          {"business_subscription_id", binding.businessSubscriptionId},
                           {"updated_ms", binding.updatedMs}}
         .dump();
 }
@@ -46,6 +47,7 @@ std::optional<UssdFlowBinding> deserialize(const std::string &text) {
         binding.blueprintJson = json.value("blueprint_json", "");
         binding.serviceKey = json.value("service_key", "");
         binding.dialCode = json.value("dial_code", "");
+        binding.businessSubscriptionId = json.value("business_subscription_id", "");
         binding.updatedMs = json.value("updated_ms", int64_t{0});
         if (binding.workflowId.empty()) {
             return std::nullopt;

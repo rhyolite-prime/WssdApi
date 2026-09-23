@@ -44,6 +44,9 @@ struct UssdFlowBinding {
     std::string blueprintJson;
     std::string serviceKey;
     std::string dialCode;
+    /// ussd_subscriptions.id resolved at initiation ("" when the service
+    /// has no subscription row). Continuations reuse it for the audit row.
+    std::string businessSubscriptionId;
     int64_t updatedMs = 0;
 };
 

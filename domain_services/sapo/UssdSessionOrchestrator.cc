@@ -45,10 +45,15 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
     const std::string sapoSessionId = sapoSessionIdFor(interaction);
 
     if (interaction.isRelease) {
-        co_await BlockingRunner::instance().run([this, &engine, sapoSessionId] {
-            engine.cancelSession(sapoSessionId, "gateway release");
-            bindings_.remove(sapoSessionId);
-        });
+        // Read-then-drop: the binding carries the subscription id the audit
+        // row needs, so capture it before removing the binding.
+        const std::string subscriptionId = co_await BlockingRunner::instance().run(
+            [this, &engine, sapoSessionId] {
+                engine.cancelSession(sapoSessionId, "gateway release");
+                const auto bound = bindings_.find(sapoSessionId);
+                bindings_.remove(sapoSessionId);
+                return bound.has_value() ? bound->businessSubscriptionId : std::string{};
+            });
         UssdResult result;
         result.cont = false;
         result.message = "Session ended.";
@@ -56,7 +61,7 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
         result.label = "Session ended.";
         result.sapoSessionId = sapoSessionId;
         result.status = "cancelled";
-        co_await auditSession(interaction, result);
+        co_await auditSession(interaction, result, subscriptionId);
         co_return std::move(result);
     }
 
@@ -79,6 +84,7 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
             ResolvedWorkflow pinned;
             pinned.workflowId = bound->workflowId;
             pinned.blueprintJson = bound->blueprintJson;
+            pinned.businessSubscriptionId = bound->businessSubscriptionId;
             pinned.matchedKey = "session-binding";
             resolved = std::move(pinned);
             if (!bound->dialCode.empty()) {
@@ -101,7 +107,7 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
     if (workflowId.empty()) {
         LOG_ERROR << "[ussd] blueprint failed: " << blueprintError;
         UssdResult result = unavailable("Service temporarily unavailable. Please try again later.");
-        co_await auditSession(interaction, result);
+        co_await auditSession(interaction, result, resolved->businessSubscriptionId);
         co_return std::move(result);
     }
 
@@ -111,6 +117,7 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
         binding.blueprintJson = resolved->blueprintJson;
         binding.serviceKey = interaction.serviceKey;
         binding.dialCode = interaction.dialCode;
+        binding.businessSubscriptionId = resolved->businessSubscriptionId;
         co_await BlockingRunner::instance().run([this, sapoSessionId, binding] {
             bindings_.save(sapoSessionId, binding);
         });
@@ -153,12 +160,13 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
                   << " error=" << outcome.error;
     }
 
-    co_await auditSession(interaction, result);
+    co_await auditSession(interaction, result, resolved->businessSubscriptionId);
     co_return std::move(result);
 }
 
 drogon::Task<void> UssdSessionOrchestrator::auditSession(const UssdInteraction &interaction,
-                                                         const UssdResult &result) {
+                                                         const UssdResult &result,
+                                                         const std::string &businessSubscriptionId) {
     try {
         auto db = drogon::app().getDbClient();
         drogon::orm::CoroMapper<drogon_model::WssdApi::UssdSessions> mapper(db);
@@ -178,9 +186,19 @@ drogon::Task<void> UssdSessionOrchestrator::auditSession(const UssdInteraction &
             result.cont ? "active" : (result.status == "failed" ? "failed" : "closed");
 
         if (rows.empty()) {
+            if (businessSubscriptionId.empty()) {
+                // business_subscription_id is NOT NULL with no default: a
+                // session we cannot attribute to a subscription cannot be
+                // audited. The subscriber's turn already succeeded; only the
+                // audit row is lost.
+                LOG_WARN << "[ussd] skipping audit insert for session "
+                         << interaction.networkSessionId << ": no business subscription resolved";
+                co_return;
+            }
             drogon_model::WssdApi::UssdSessions row;
             row.setId(utils::IdGeneratorUtils::generateGuid());
             row.setNetworkSessionId(interaction.networkSessionId);
+            row.setBusinessSubscriptionId(businessSubscriptionId);
             row.setMsisdn(interaction.msisdn);
             row.setNetworkProvider(toString(interaction.provider));
             row.setStartTime(now);
@@ -192,6 +210,10 @@ drogon::Task<void> UssdSessionOrchestrator::auditSession(const UssdInteraction &
             co_await mapper.insert(row);
         } else {
             auto row = rows.front();
+            if (!businessSubscriptionId.empty()) {
+                // Same session key, possibly redialled service: re-attribute.
+                row.setBusinessSubscriptionId(businessSubscriptionId);
+            }
             row.setDetails(detailsText);
             row.setStatus(status);
             if (!result.cont) {

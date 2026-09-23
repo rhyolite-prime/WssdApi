@@ -34,6 +34,11 @@ struct ResolvedWorkflow {
     std::string blueprintJson;
     std::string displayTitle;
     std::string matchedKey;
+    /// ussd_subscriptions.id whose ussd_code matches the dialed service
+    /// ("" when none). Feeds the audit row's NOT NULL
+    /// business_subscription_id and is pinned in the flow binding so
+    /// continuations reuse it.
+    std::string businessSubscriptionId;
     bool fromDatabase = false;
 };
 

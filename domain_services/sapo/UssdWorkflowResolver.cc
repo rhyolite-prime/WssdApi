@@ -17,6 +17,7 @@
 #include <drogon/orm/Criteria.h>
 #include <nlohmann/json.hpp>
 
+#include "UssdSubscriptions.h"
 #include "WssdRegistry.h"
 
 namespace wssd_api::sapo_host {
@@ -105,6 +106,27 @@ std::string sanitizeFileStem(const std::string &key) {
     return stem;
 }
 
+/// ussd_subscriptions.id for the first key with a subscription row (""
+/// when none). Never throws: lookup outages degrade to unattributed audit
+/// (the audit insert is then skipped, the turn itself unaffected).
+drogon::Task<std::string> lookupSubscriptionId(const std::vector<std::string> &keys) {
+    using drogon_model::WssdApi::UssdSubscriptions;
+    try {
+        auto db = drogon::app().getDbClient();
+        drogon::orm::CoroMapper<UssdSubscriptions> mapper(db);
+        for (const auto &key : keys) {
+            auto rows = co_await mapper.limit(1).findBy(drogon::orm::Criteria(
+                UssdSubscriptions::Cols::_ussd_code, drogon::orm::CompareOperator::EQ, key));
+            if (!rows.empty()) {
+                co_return rows.front().getValueOfId();
+            }
+        }
+    } catch (const std::exception &e) {
+        LOG_WARN << "[ussd] subscription lookup failed: " << e.what();
+    }
+    co_return std::string{};
+}
+
 }  // namespace
 
 drogon::Task<std::optional<ResolvedWorkflow>> UssdWorkflowResolver::resolve(
@@ -120,24 +142,37 @@ drogon::Task<std::optional<ResolvedWorkflow>> UssdWorkflowResolver::resolve(
         }
     }
 
+    std::optional<ResolvedWorkflow> found;
     for (const auto &key : ordered) {
         if (auto hit = co_await lookupDatabase(key)) {
-            co_return std::move(hit);
+            found = std::move(hit);
+            break;
         }
     }
-    for (const auto &key : ordered) {
-        if (auto hit = lookupFile(key)) {
-            co_return std::move(hit);
+    if (!found) {
+        for (const auto &key : ordered) {
+            if (auto hit = lookupFile(key)) {
+                found = std::move(hit);
+                break;
+            }
         }
     }
-    if (auto fallback = lookupFileStem(settings_.defaultWorkflowFile)) {
-        LOG_WARN << "[ussd] no workflow for service='" << serviceKey << "' dial='" << dialCode
-                 << "'; using default blueprint";
-        co_return std::move(fallback);
+    if (!found) {
+        if (auto fallback = lookupFileStem(settings_.defaultWorkflowFile)) {
+            LOG_WARN << "[ussd] no workflow for service='" << serviceKey << "' dial='" << dialCode
+                     << "'; using default blueprint";
+            found = std::move(fallback);
+        }
     }
-    LOG_ERROR << "[ussd] no workflow for service='" << serviceKey << "' dial='" << dialCode
-              << "' and no default blueprint";
-    co_return std::optional<ResolvedWorkflow>{};
+    if (!found) {
+        LOG_ERROR << "[ussd] no workflow for service='" << serviceKey << "' dial='" << dialCode
+                  << "' and no default blueprint";
+        co_return std::optional<ResolvedWorkflow>{};
+    }
+    // Attribute the audit row: the subscription whose ussd_code matches the
+    // dialed service ("" when none — the audit insert is then skipped).
+    found->businessSubscriptionId = co_await lookupSubscriptionId(ordered);
+    co_return found;
 }
 
 drogon::Task<std::optional<ResolvedWorkflow>> UssdWorkflowResolver::lookupDatabase(

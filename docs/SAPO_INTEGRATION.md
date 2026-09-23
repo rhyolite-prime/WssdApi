@@ -32,7 +32,10 @@ provider-neutral JSON.
    `wssd_registry` by `ussd_code` (the row's `executable` column **is** the
    Sapo blueprint JSON), then
    `sapo/workflows/<key>.json`, then the `default` fallback blueprint.
-   Initiation turns pin the binding for the turns that follow.
+   Initiation turns pin the binding for the turns that follow. Resolution
+   also attaches the `ussd_subscriptions.id` whose `ussd_code` matches, for
+   the audit row's `business_subscription_id` (sessions without one skip
+   the audit insert).
 3. The blueprint is registered under a deterministic id (`wssd:<code>`,
    content-hashed so steady-state turns skip re-registration).
 4. Exactly one engine turn runs **off the Drogon IO threads** on the

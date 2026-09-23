@@ -93,6 +93,7 @@ DROGON_TEST(UssdFlowBindingStoreMemory) {
     binding.blueprintJson = "{\"name\":\"wssd:123\"}";
     binding.serviceKey = "wssd-nalo";
     binding.dialCode = "*123#";
+    binding.businessSubscriptionId = "sub-1";
     store.save("nalo:2331", binding);
 
     auto hit = store.find("nalo:2331");
@@ -101,6 +102,7 @@ DROGON_TEST(UssdFlowBindingStoreMemory) {
     CHECK(hit->blueprintJson == "{\"name\":\"wssd:123\"}");
     CHECK(hit->serviceKey == "wssd-nalo");
     CHECK(hit->dialCode == "*123#");
+    CHECK(hit->businessSubscriptionId == "sub-1");
     CHECK(hit->updatedMs > 0);
 
     // Redial overwrites the pinned flow.

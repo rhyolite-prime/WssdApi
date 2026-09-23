@@ -40,7 +40,11 @@ class UssdSessionOrchestrator {
     drogon::Task<UssdResult> handle(const UssdInteraction &interaction);
 
   private:
-    drogon::Task<void> auditSession(const UssdInteraction &interaction, const UssdResult &result);
+    /// Best-effort audit upsert. Empty `businessSubscriptionId` skips the
+    /// insert (the column is NOT NULL with no default) but still updates an
+    /// existing row's details/status.
+    drogon::Task<void> auditSession(const UssdInteraction &interaction, const UssdResult &result,
+                                    const std::string &businessSubscriptionId = "");
 
     static std::string sapoSessionIdFor(const UssdInteraction &interaction);
     static UssdResult unavailable(const std::string &message);
