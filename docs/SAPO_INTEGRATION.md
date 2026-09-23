@@ -131,7 +131,12 @@ sapoc validate sapo/workflows/my-service.json
 ```
 
 Blueprints stored in `wssd_registry.executable` are hot-reloadable: the next
-turn that resolves them re-registers the changed text automatically.
+turn that resolves them re-registers the changed text automatically, with
+validate-before-replace (a bad edit is rejected and the previous flow keeps
+serving instead of being removed). Open sessions keep running the version
+they started with — turns re-register their own pinned text — so keep edits
+to a live flow's node ids additive, or drain sessions before incompatible
+ones.
 
 ## Configuration
 
@@ -217,6 +222,7 @@ cmake --build build -j"$(nproc)"
 | `config: engine.state_redis must be a non-empty redis:// URL string` at boot | `state_redis` is present but unresolvable (unset env var, typo'd URL). Same fix: remove the key from `sapo-config.json`, configure Redis only through the plugin |
 | `unknown top-level config section 'redis_url'` at boot / engine did not start | `redis_url` was added to `sapo-config.json`, where nothing reads it (and the engine rejects unknown sections, fatally). It belongs in Drogon `config.json` (`plugins.SapoEnginePlugin.config.redis_url`) or `SAPO_REDIS_URL` env — remove it from the engine file |
 | "Service not available for this code" | No registry/file/default blueprint matched — check `wssd_registry.executable` for the code and `sapo/workflows/default.json` |
+| Dialed service runs the fallback menu instead of its flow | The registry row matched but its `executable` is empty/invalid, so resolution degraded to file/default — look for `[ussd] registry entry ... has no executable blueprint` or `[ussd] blueprint failed` at boot/turn time |
 | Hubtel session restarts mid-menu | State store lost (file store on an ephemeral disk, or Redis flushed) — use Redis in production |
 | Blueprint HTTP calls fail | Read the `[ussd] turn failed code=...` line: `HTTP_ERROR` = transport problem (DNS/TLS/refused/timeout — the message names the URL and cause), `HTTP_STATUS_ERROR` = downstream answered non-2xx, `VALIDATION_ERROR` = non-absolute URL in the blueprint (absolute `http(s)` URLs only). Redirects are followed (5 hops); express transient retries as node `retry` policies, not redials |
 | Logs show `resume failed ... restarting session` | Checkpoint expired between lookup and resume (gateway retry after a long pause) — expected, self-heals. Turn *execution* errors (e.g. `HTTP_ERROR` from a blueprint API call) no longer restart: they log `turn execution failed` with the underlying message instead |

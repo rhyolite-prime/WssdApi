@@ -366,8 +366,31 @@ std::string SapoEngineService::ensureBlueprint(const std::string &workflowId,
         return workflowId;
     }
 
+    // NOTE (database-driven flows): every turn re-registers its own pinned
+    // blueprint text, so turns from sessions pinned to different versions of
+    // one flow swap the registration back and forth (last writer wins per
+    // turn). A turn runs against the text it just registered unless another
+    // thread re-registers in between — keep edits to a live flow's node ids
+    // additive, or drain open sessions before incompatible edits.
     try {
         if (vm_->workflows().find(workflowId) != nullptr) {
+            // Validate-before-replace: a bad edit to a database-driven flow
+            // must not take the live flow down. Probe-register the same text
+            // under a temporary id first (identical acceptance to the real
+            // registration — it is the same function); only when it parses do
+            // we swap it in. On probe failure the previous blueprint keeps
+            // serving and the turn fails loudly with the rejection reason.
+            const std::string probeId = workflowId + "__probe__";
+            vm_->workflows().remove(probeId);
+            nlohmann::json probe = document;
+            probe["name"] = probeId;
+            try {
+                vm_->addBlueprintText(probe.dump(), "wssd:probe");
+            } catch (...) {
+                vm_->workflows().remove(probeId);
+                throw;
+            }
+            vm_->workflows().remove(probeId);
             vm_->workflows().remove(workflowId);
         }
         vm_->addBlueprintText(text, "wssd:" + workflowId);
