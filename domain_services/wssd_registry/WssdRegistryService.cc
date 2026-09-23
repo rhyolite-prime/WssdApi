@@ -100,9 +100,7 @@ namespace wssd_api::domain_services {
             if(!dto.getDisplayTitle().empty()) model.setDisplayTitle(dto.getDisplayTitle());
             if(!dto.getDescription().empty()) model.setDescription(dto.getDescription());
             if(!dto.getLogoUrl().empty()) model.setLogoUrl(dto.getLogoUrl());
-            model.setIsWssdActive(dto.getIsWssdActive());
-            model.setIsUssdActive(dto.getIsUssdActive());
-            model.setUseAsSecondaryService(dto.getUseAsSecondaryService());
+
             model.setTenantId(dto.getTenantId());
             model.setRank(dto.getRank());
             if(!dto.getMerchantIdentifier().empty()) model.setMerchantIdentifier(dto.getMerchantIdentifier());
@@ -137,9 +135,6 @@ namespace wssd_api::domain_services {
             if(!dto.getDisplayTitle().empty()) existingModel.setDisplayTitle(dto.getDisplayTitle());
             if(!dto.getDescription().empty()) existingModel.setDescription(dto.getDescription());
             if(!dto.getLogoUrl().empty()) existingModel.setLogoUrl(dto.getLogoUrl());
-            existingModel.setIsWssdActive(dto.getIsWssdActive());
-            existingModel.setIsUssdActive(dto.getIsUssdActive());
-            existingModel.setUseAsSecondaryService(dto.getUseAsSecondaryService());
             existingModel.setTenantId(dto.getTenantId());
             existingModel.setRank(dto.getRank());
             if(!dto.getMerchantIdentifier().empty()) existingModel.setMerchantIdentifier(dto.getMerchantIdentifier());

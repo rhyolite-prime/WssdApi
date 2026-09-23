@@ -51,10 +51,8 @@ class WssdRegistry
         static const std::string _description;
         static const std::string _activated_on;
         static const std::string _logo_url;
-        static const std::string _is_wssd_active;
-        static const std::string _is_ussd_active;
-        static const std::string _use_as_secondary_service;
         static const std::string _tenant_id;
+        static const std::string _service_type;
         static const std::string _rank;
         static const std::string _merchant_identifier;
         static const std::string _category;
@@ -181,30 +179,6 @@ class WssdRegistry
     void setLogoUrl(std::string &&pLogoUrl) noexcept;
     void setLogoUrlToNull() noexcept;
 
-    /**  For column is_wssd_active  */
-    ///Get the value of the column is_wssd_active, returns the default value if the column is null
-    const bool &getValueOfIsWssdActive() const noexcept;
-    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
-    const std::shared_ptr<bool> &getIsWssdActive() const noexcept;
-    ///Set the value of the column is_wssd_active
-    void setIsWssdActive(const bool &pIsWssdActive) noexcept;
-
-    /**  For column is_ussd_active  */
-    ///Get the value of the column is_ussd_active, returns the default value if the column is null
-    const bool &getValueOfIsUssdActive() const noexcept;
-    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
-    const std::shared_ptr<bool> &getIsUssdActive() const noexcept;
-    ///Set the value of the column is_ussd_active
-    void setIsUssdActive(const bool &pIsUssdActive) noexcept;
-
-    /**  For column use_as_secondary_service  */
-    ///Get the value of the column use_as_secondary_service, returns the default value if the column is null
-    const bool &getValueOfUseAsSecondaryService() const noexcept;
-    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
-    const std::shared_ptr<bool> &getUseAsSecondaryService() const noexcept;
-    ///Set the value of the column use_as_secondary_service
-    void setUseAsSecondaryService(const bool &pUseAsSecondaryService) noexcept;
-
     /**  For column tenant_id  */
     ///Get the value of the column tenant_id, returns the default value if the column is null
     const int32_t &getValueOfTenantId() const noexcept;
@@ -212,6 +186,14 @@ class WssdRegistry
     const std::shared_ptr<int32_t> &getTenantId() const noexcept;
     ///Set the value of the column tenant_id
     void setTenantId(const int32_t &pTenantId) noexcept;
+
+    /**  For column service_type  */
+    ///Get the value of the column service_type, returns the default value if the column is null
+    const int32_t &getValueOfServiceType() const noexcept;
+    ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
+    const std::shared_ptr<int32_t> &getServiceType() const noexcept;
+    ///Set the value of the column service_type
+    void setServiceType(const int32_t &pServiceType) noexcept;
 
     /**  For column rank  */
     ///Get the value of the column rank, returns the default value if the column is null
@@ -280,7 +262,7 @@ class WssdRegistry
     void setUpdatedAtToNull() noexcept;
 
 
-    static size_t getColumnNumber() noexcept {  return 18;  }
+    static size_t getColumnNumber() noexcept {  return 16;  }
     static const std::string &getColumnName(size_t index) noexcept(false);
 
     Json::Value toJson() const;
@@ -309,10 +291,8 @@ class WssdRegistry
     std::shared_ptr<std::string> description_;
     std::shared_ptr<::trantor::Date> activatedOn_;
     std::shared_ptr<std::string> logoUrl_;
-    std::shared_ptr<bool> isWssdActive_;
-    std::shared_ptr<bool> isUssdActive_;
-    std::shared_ptr<bool> useAsSecondaryService_;
     std::shared_ptr<int32_t> tenantId_;
+    std::shared_ptr<int32_t> serviceType_;
     std::shared_ptr<int32_t> rank_;
     std::shared_ptr<std::string> merchantIdentifier_;
     std::shared_ptr<std::string> category_;
@@ -331,7 +311,7 @@ class WssdRegistry
         const bool notNull_;
     };
     static const std::vector<MetaData> metaData_;
-    bool dirtyFlag_[18]={ false };
+    bool dirtyFlag_[16]={ false };
   public:
     static const std::string &sqlForFindingByPrimaryKey()
     {
@@ -385,19 +365,18 @@ class WssdRegistry
             sql += "logo_url,";
             ++parametersCount;
         }
-        sql += "is_wssd_active,";
-        ++parametersCount;
-        if(!dirtyFlag_[7])
+        if(dirtyFlag_[7])
         {
-            needSelection=true;
+            sql += "tenant_id,";
+            ++parametersCount;
         }
-        sql += "is_ussd_active,";
+        sql += "service_type,";
         ++parametersCount;
         if(!dirtyFlag_[8])
         {
             needSelection=true;
         }
-        sql += "use_as_secondary_service,";
+        sql += "rank,";
         ++parametersCount;
         if(!dirtyFlag_[9])
         {
@@ -405,44 +384,33 @@ class WssdRegistry
         }
         if(dirtyFlag_[10])
         {
-            sql += "tenant_id,";
-            ++parametersCount;
-        }
-        sql += "rank,";
-        ++parametersCount;
-        if(!dirtyFlag_[11])
-        {
-            needSelection=true;
-        }
-        if(dirtyFlag_[12])
-        {
             sql += "merchant_identifier,";
             ++parametersCount;
         }
-        if(dirtyFlag_[13])
+        if(dirtyFlag_[11])
         {
             sql += "category,";
             ++parametersCount;
         }
-        if(dirtyFlag_[14])
+        if(dirtyFlag_[12])
         {
             sql += "business_name,";
             ++parametersCount;
         }
-        if(dirtyFlag_[15])
+        if(dirtyFlag_[13])
         {
             sql += "executable,";
             ++parametersCount;
         }
         sql += "created_at,";
         ++parametersCount;
-        if(!dirtyFlag_[16])
+        if(!dirtyFlag_[14])
         {
             needSelection=true;
         }
         sql += "updated_at,";
         ++parametersCount;
-        if(!dirtyFlag_[17])
+        if(!dirtyFlag_[15])
         {
             needSelection=true;
         }
@@ -501,10 +469,6 @@ class WssdRegistry
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);
         }
-        else
-        {
-            sql +="default,";
-        }
         if(dirtyFlag_[8])
         {
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
@@ -533,10 +497,6 @@ class WssdRegistry
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);
         }
-        else
-        {
-            sql +="default,";
-        }
         if(dirtyFlag_[12])
         {
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
@@ -552,21 +512,11 @@ class WssdRegistry
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);
         }
-        if(dirtyFlag_[15])
-        {
-            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
-            sql.append(placeholderStr, n);
-        }
-        if(dirtyFlag_[16])
-        {
-            n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
-            sql.append(placeholderStr, n);
-        }
         else
         {
             sql +="default,";
         }
-        if(dirtyFlag_[17])
+        if(dirtyFlag_[15])
         {
             n = snprintf(placeholderStr,sizeof(placeholderStr),"$%d,",placeholder++);
             sql.append(placeholderStr, n);
