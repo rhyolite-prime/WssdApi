@@ -27,7 +27,7 @@
 // keeping test binaries free of the Sapo include path.
 namespace sapo::runtime {
 struct ExecutionOutcome;
-}  // namespace sapo::runtime
+}  // namespace sapo-dev::runtime
 
 namespace wssd_api::sapo_host::adapters {
 

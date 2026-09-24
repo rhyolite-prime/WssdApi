@@ -171,7 +171,7 @@ expect_code 400 "hubtel missing SessionId/Mobile -> 400" && {
     expect_jq '.success == false' "hubtel 400 body reports success=false"
 }
 
-# 9-12. Multi-step demo flow (ServiceCode wssd-demo -> sapo/workflows/wssd-demo.json)
+# 9-12. Multi-step demo flow (ServiceCode wssd-demo -> sapo-dev/workflows/wssd-demo.json)
 DEMO_SESSION="demo-e2e-$TS"
 demo_turn() { # $1=message $2=sequence
     post /api/v1/ussd-interaction/hubtel "$(cat <<JSON

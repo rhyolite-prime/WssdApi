@@ -1,11 +1,11 @@
 //
 // DrogonHttpTransport.h — Sapo IHttpTransport backed by Drogon's HttpClient.
 //
-// Blueprint `command` nodes (http.get/http.post/...) build a sapo::http::Request
+// Blueprint `command` nodes (http.get/http.post/...) build a sapo-dev::http::Request
 // and the engine hands it here. This adapter:
 //
 //   * parses the absolute URL into a Drogon client base (scheme://host:port)
-//     plus path, merging sapo's structured `query` object into the query string;
+//     plus path, merging sapo-dev's structured `query` object into the query string;
 //   * maps every HTTP method, headers, bearer/basic auth and string/JSON bodies;
 //   * never blocks a Drogon IO thread: Sapo invokes transports on its own
 //     worker threads, and the async Drogon call below is joined with a
@@ -47,7 +47,7 @@ class HostDrogonTransport final : public sapo::http::IHttpTransport {
         // swallow HTTP failures into on_error branches, so without this the
         // service log shows nothing at all). The query string is stripped —
         // it is the usual place for tokens and subscriber ids.
-        LOG_INFO << "[sapo] http " << request.method << " "
+        LOG_INFO << "[sapo-dev] http " << request.method << " "
                  << request.url.substr(0, request.url.find('?'));
         const long timeoutMs = request.timeout_ms > 0 ? request.timeout_ms : 10000;
         const double timeoutSec = static_cast<double>(timeoutMs) / 1000.0;
@@ -182,7 +182,7 @@ class HostDrogonTransport final : public sapo::http::IHttpTransport {
         // Every exit funnels through here, so this one line captures failures
         // even when the blueprint swallows them into an on_error branch.
         if (!response.transport_error.empty()) {
-            LOG_WARN << "[sapo] http call failed: " << response.transport_error;
+            LOG_WARN << "[sapo-dev] http call failed: " << response.transport_error;
         }
         return response;
     }
@@ -238,7 +238,7 @@ class HostDrogonTransport final : public sapo::http::IHttpTransport {
         return true;
     }
 
-    /// Encodes sapo's structured query object as "?k=v&..." (or "&k=v..."
+    /// Encodes sapo-dev's structured query object as "?k=v&..." (or "&k=v..."
     /// when the path already carries a query string).
     static std::string querySuffix(const std::string &path, const nlohmann::json &query) {
         if (!query.is_object() || query.empty()) {

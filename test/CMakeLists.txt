@@ -4,7 +4,7 @@ project(WssdApi_test CXX)
 # The Sapo mapping tests compile ProviderAdapters.cc directly: it only touches
 # header-declared Sapo shapes (ExecutionOutcome fields, nlohmann/json), so the
 # test binary links no Sapo library. The vendored headers + nlohmann in
-# vendor/sapo/include are always present in the repo, independent of how the
+# vendor/sapo-dev/include are always present in the repo, independent of how the
 # main target resolves the engine (prebuilt vs FetchContent).
 add_executable(${PROJECT_NAME}
         test_main.cc

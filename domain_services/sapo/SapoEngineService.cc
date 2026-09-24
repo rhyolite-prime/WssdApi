@@ -77,7 +77,7 @@ std::shared_ptr<sapo::runtime::IStateStore> buildStateStore(
         try {
             sapo::redis::RedisOptions options = parseRedisOptions(redisUrl);
             options.pool_size = settings.redisPoolSize == 0 ? 8 : settings.redisPoolSize;
-            options.client_name = "wssdapi-sapo";
+            options.client_name = "wssdapi-sapo-dev";
             auto client = std::make_shared<sapo::redis::SocketRedisClient>(std::move(options));
             // Dial check: a lazy client would only fail per-turn (every lookup
             // throwing looks like "no session" downstream). Fail fast here so
@@ -90,14 +90,14 @@ std::shared_ptr<sapo::runtime::IStateStore> buildStateStore(
             sapo::redis::RedisStateStoreOptions storeOptions;
             storeOptions.ttl_seconds = settings.redisTtlSeconds;
             storeOptions.atomic_index = settings.redisAtomicIndex;
-            LOG_INFO << "[sapo] state store: redis (" << client->options().describe() << ")";
+            LOG_INFO << "[sapo-dev] state store: redis (" << client->options().describe() << ")";
             return std::make_shared<sapo::redis::RedisStateStore>(client, storeOptions);
         } catch (const std::exception &e) {
-            LOG_ERROR << "[sapo] redis state store unavailable (" << e.what()
+            LOG_ERROR << "[sapo-dev] redis state store unavailable (" << e.what()
                       << "); falling back to the file store";
         }
 #else
-        LOG_ERROR << "[sapo] redis configured but the engine was built without "
+        LOG_ERROR << "[sapo-dev] redis configured but the engine was built without "
                      "SAPO_ENABLE_REDIS; falling back to the file store";
 #endif
     }
@@ -105,17 +105,17 @@ std::shared_ptr<sapo::runtime::IStateStore> buildStateStore(
     std::error_code ec;
     std::filesystem::create_directories(settings.stateDirectory, ec);
     if (ec) {
-        LOG_ERROR << "[sapo] cannot create state directory '" << settings.stateDirectory
+        LOG_ERROR << "[sapo-dev] cannot create state directory '" << settings.stateDirectory
                   << "' (" << ec.message() << "); using in-memory state (NOT durable)";
         return std::make_shared<sapo::runtime::InMemoryStateStore>();
     }
     if (redisUrl.empty()) {
-        LOG_INFO << "[sapo] state store: file (" << settings.stateDirectory
+        LOG_INFO << "[sapo-dev] state store: file (" << settings.stateDirectory
                  << ") — redis_url is not set (set SAPO_REDIS_URL or config redis_url for Redis)";
     } else {
         // A redis_url WAS configured but unusable; the reason was already
         // logged as an error above, this line just confirms the fallback.
-        LOG_INFO << "[sapo] state store: file (" << settings.stateDirectory << ")";
+        LOG_INFO << "[sapo-dev] state store: file (" << settings.stateDirectory << ")";
     }
     return std::make_shared<sapo::runtime::FileStateStore>(settings.stateDirectory);
 }
@@ -169,7 +169,7 @@ SapoEngineService::~SapoEngineService() {
 bool SapoEngineService::configure(const SapoSettings &settings) {
     std::lock_guard<std::mutex> lock(registryMutex_);
     if (vm_) {
-        LOG_WARN << "[sapo] engine already configured; ignoring reconfigure";
+        LOG_WARN << "[sapo-dev] engine already configured; ignoring reconfigure";
         return true;
     }
     settings_ = settings;
@@ -186,7 +186,7 @@ bool SapoEngineService::configure(const SapoSettings &settings) {
                              (envHost != nullptr && *envHost != '\0');
         std::error_code cwdError;
         const auto cwd = std::filesystem::current_path(cwdError);
-        LOG_INFO << "[sapo] settings: cwd='"
+        LOG_INFO << "[sapo-dev] settings: cwd='"
                  << (cwdError ? std::string("<unknown>") : cwd.string()) << "' config_path='"
                  << settings_.configPath << "' workflow_dir='" << settings_.workflowDirectory
                  << "' state_dir='" << settings_.stateDirectory << "' redis="
@@ -219,7 +219,7 @@ bool SapoEngineService::configure(const SapoSettings &settings) {
             try {
                 auto store = sapo::config::ProviderConfigStore::load(settings_.configPath);
                 for (const auto &problem : store.validate()) {
-                    LOG_WARN << "[sapo] provider config: " << problem;
+                    LOG_WARN << "[sapo-dev] provider config: " << problem;
                 }
                 // Layer the file bindings OVER the environment bindings (never
                 // replace): blueprints may use env.* alongside config.* and
@@ -231,13 +231,13 @@ bool SapoEngineService::configure(const SapoSettings &settings) {
                 providerConfig = std::make_shared<sapo::config::ProviderConfigStore>(std::move(store));
                 services.provider_config = providerConfig;
                 services.applySecretRedaction();
-                LOG_INFO << "[sapo] provider config: " << settings_.configPath;
+                LOG_INFO << "[sapo-dev] provider config: " << settings_.configPath;
             } catch (const std::exception &e) {
-                LOG_WARN << "[sapo] ignoring provider config '" << settings_.configPath
+                LOG_WARN << "[sapo-dev] ignoring provider config '" << settings_.configPath
                          << "': " << e.what();
             }
         } else if (!settings_.configPath.empty()) {
-            LOG_INFO << "[sapo] no provider config at '" << settings_.configPath
+            LOG_INFO << "[sapo-dev] no provider config at '" << settings_.configPath
                      << "' (optional); continuing without it";
         }
 
@@ -246,7 +246,7 @@ bool SapoEngineService::configure(const SapoSettings &settings) {
         // selection whenever that key exists (and fails startup when it is
         // unresolvable), so honoring it in two places would split-brain Redis
         // configuration. The plugin redis_url / SAPO_REDIS_URL env is the
-        // single source of truth; sapo-config.json must not set state_redis.
+        // single source of truth; sapo-dev-config.json must not set state_redis.
         services.state_store = buildStateStore(settings_, settings_.redisUrl);
 
         applyEngineLimits(services);
@@ -257,7 +257,7 @@ bool SapoEngineService::configure(const SapoSettings &settings) {
             std::error_code ec;
             std::filesystem::create_directories(settings_.workflowDirectory, ec);
             if (ec) {
-                LOG_WARN << "[sapo] cannot create workflow directory '" << settings_.workflowDirectory
+                LOG_WARN << "[sapo-dev] cannot create workflow directory '" << settings_.workflowDirectory
                          << "': " << ec.message();
             }
             vm_->setWorkflowDirectory(settings_.workflowDirectory);
@@ -267,10 +267,10 @@ bool SapoEngineService::configure(const SapoSettings &settings) {
         }
 
         for (const auto &problem : vm_->services().startupCheck()) {
-            LOG_WARN << "[sapo] startup check: " << problem;
+            LOG_WARN << "[sapo-dev] startup check: " << problem;
         }
     } catch (const std::exception &e) {
-        LOG_ERROR << "[sapo] configure failed: " << e.what();
+        LOG_ERROR << "[sapo-dev] configure failed: " << e.what();
         vm_.reset();
         return false;
     }
@@ -281,7 +281,7 @@ bool SapoEngineService::configure(const SapoSettings &settings) {
 
 std::vector<std::string> SapoEngineService::start() {
     if (!configured_ || !vm_) {
-        return {"sapo engine is not configured"};
+        return {"sapo-dev engine is not configured"};
     }
     std::vector<std::string> problems;
     try {
@@ -291,9 +291,9 @@ std::vector<std::string> SapoEngineService::start() {
         // not abort application startup; only fatal entries are returned.
         for (const auto &problem : vm_->start()) {
             if (isWarningProblem(problem)) {
-                LOG_WARN << "[sapo] engine warning at startup: " << problem;
+                LOG_WARN << "[sapo-dev] engine warning at startup: " << problem;
             } else {
-                LOG_ERROR << "[sapo] start problem: " << problem;
+                LOG_ERROR << "[sapo-dev] start problem: " << problem;
                 problems.push_back(problem);
             }
         }
@@ -306,7 +306,7 @@ std::vector<std::string> SapoEngineService::start() {
         vm_->startBackgroundTick(std::chrono::milliseconds(500));
     } catch (const std::exception &e) {
         started_.store(false);
-        return {std::string("sapo engine start threw: ") + e.what()};
+        return {std::string("sapo-dev engine start threw: ") + e.what()};
     }
     started_.store(true);
     std::string workflowIds;
@@ -316,7 +316,7 @@ std::vector<std::string> SapoEngineService::start() {
         }
         workflowIds += id;
     }
-    LOG_INFO << "[sapo] engine started (workflows=" << vm_->workflows().size() << " [" << workflowIds
+    LOG_INFO << "[sapo-dev] engine started (workflows=" << vm_->workflows().size() << " [" << workflowIds
              << "], store=" << vm_->services().state_store->kind() << ", http="
              << (vm_->services().transport != nullptr ? vm_->services().transport->name()
                                                       : std::string("<none>"))
@@ -330,7 +330,7 @@ void SapoEngineService::stop() {
             vm_->stop();
         }
     } catch (const std::exception &e) {
-        LOG_ERROR << "[sapo] stop failed: " << e.what();
+        LOG_ERROR << "[sapo-dev] stop failed: " << e.what();
     }
     started_.store(false);
 }
@@ -346,7 +346,7 @@ std::string SapoEngineService::ensureBlueprint(const std::string &workflowId,
     std::lock_guard<std::mutex> lock(registryMutex_);
     error.clear();
     if (!vm_) {
-        error = "sapo engine is not configured";
+        error = "sapo-dev engine is not configured";
         return "";
     }
     if (blueprintJson.empty()) {
@@ -417,7 +417,7 @@ std::string SapoEngineService::ensureBlueprint(const std::string &workflowId,
         return "";
     }
     blueprintHashes_[workflowId] = hash;
-    LOG_INFO << "[sapo] blueprint registered: " << workflowId;
+    LOG_INFO << "[sapo-dev] blueprint registered: " << workflowId;
     return workflowId;
 }
 
@@ -428,7 +428,7 @@ sapo::runtime::ExecutionOutcome SapoEngineService::startUssdSession(
     const std::string &correlationId) {
     if (!vm_) {
         return failedOutcome(workflowId, sapoSessionId, "NOT_CONFIGURED",
-                             "sapo engine is not configured", "");
+                             "sapo-dev engine is not configured", "");
     }
     sapo::runtime::StartSessionOptions options;
     options.session_id = sapoSessionId;
@@ -447,7 +447,7 @@ sapo::runtime::ExecutionOutcome SapoEngineService::startUssdSession(
 sapo::runtime::ExecutionOutcome SapoEngineService::resumeUssdSession(const std::string &sapoSessionId,
                                                                      const nlohmann::json &input) {
     if (!vm_) {
-        return failedOutcome("", sapoSessionId, "NOT_CONFIGURED", "sapo engine is not configured", "");
+        return failedOutcome("", sapoSessionId, "NOT_CONFIGURED", "sapo-dev engine is not configured", "");
     }
     try {
         return vm_->resumeSession(sapoSessionId, input);
@@ -468,7 +468,7 @@ sapo::runtime::ExecutionOutcome SapoEngineService::executeUssdTurn(const std::st
                                                                    bool forceStart) {
     if (!vm_) {
         return failedOutcome(workflowId, sapoSessionId, "NOT_CONFIGURED",
-                             "sapo engine is not configured", "");
+                             "sapo-dev engine is not configured", "");
     }
 
     // Initiation always starts fresh (a redial overwrites the parked
@@ -509,14 +509,14 @@ sapo::runtime::ExecutionOutcome SapoEngineService::executeUssdTurn(const std::st
         // parked session is actually gone.
         const auto after = findSession(sapoSessionId);
         if (!after.has_value() || !after->resumable) {
-            LOG_WARN << "[sapo] resume failed for " << sapoSessionId << " (code=" << outcome.error_code
+            LOG_WARN << "[sapo-dev] resume failed for " << sapoSessionId << " (code=" << outcome.error_code
                      << " node=" << outcome.error_node << " error=" << outcome.error
                      << "); checkpoint gone, restarting session";
             input["is_start"] = true;
             input["restarted_after_expiry"] = true;
             outcome = startUssdSession(workflowId, input, sapoSessionId, correlationId);
         } else {
-            LOG_ERROR << "[sapo] turn execution failed for " << sapoSessionId << " (code="
+            LOG_ERROR << "[sapo-dev] turn execution failed for " << sapoSessionId << " (code="
                       << outcome.error_code << " node=" << outcome.error_node
                       << " error=" << outcome.error << "); parked session kept, not restarting";
         }
@@ -532,7 +532,7 @@ std::optional<sapo::runtime::SessionSnapshot> SapoEngineService::findSession(
     try {
         return vm_->session(sapoSessionId);
     } catch (const std::exception &e) {
-        LOG_ERROR << "[sapo] session lookup failed for " << sapoSessionId << ": " << e.what();
+        LOG_ERROR << "[sapo-dev] session lookup failed for " << sapoSessionId << ": " << e.what();
         return std::nullopt;
     }
 }
@@ -544,7 +544,7 @@ bool SapoEngineService::cancelSession(const std::string &sapoSessionId, const st
     try {
         return vm_->cancelSession(sapoSessionId, reason);
     } catch (const std::exception &e) {
-        LOG_ERROR << "[sapo] cancel failed for " << sapoSessionId << ": " << e.what();
+        LOG_ERROR << "[sapo-dev] cancel failed for " << sapoSessionId << ": " << e.what();
         return false;
     }
 }
@@ -556,7 +556,7 @@ nlohmann::json SapoEngineService::metrics() const {
     try {
         return vm_->metrics();
     } catch (const std::exception &e) {
-        LOG_ERROR << "[sapo] metrics failed: " << e.what();
+        LOG_ERROR << "[sapo-dev] metrics failed: " << e.what();
         return nlohmann::json::object();
     }
 }
