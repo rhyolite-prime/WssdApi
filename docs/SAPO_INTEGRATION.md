@@ -189,7 +189,7 @@ fallback). Keep Redis configuration in exactly one place: `redis_url` /
 
 CMake resolves the engine automatically:
 
-1. `vendor/sapo/lib/libsapo_core.a` — a `cmake --install` tree of SapoEngine
+1. `../vendor/sapo-dev/lib/libsapo_core.a` — a `cmake --install` tree of SapoEngine
    (the repo currently vendors headers + CMake config only; drop the built
    `.a` here for hermetic offline builds), else
 2. `FetchContent` from `rhyolite-prime/SapoEngine` (`WSSD_SAPO_GIT_TAG`,

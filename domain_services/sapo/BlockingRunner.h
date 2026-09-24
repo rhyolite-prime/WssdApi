@@ -132,9 +132,9 @@ class BlockingRunner {
             try {
                 task();
             } catch (const std::exception &e) {
-                LOG_ERROR << "[sapo] blocking task threw: " << e.what();
+                LOG_ERROR << "[sapo-dev] blocking task threw: " << e.what();
             } catch (...) {
-                LOG_ERROR << "[sapo] blocking task threw an unknown exception";
+                LOG_ERROR << "[sapo-dev] blocking task threw an unknown exception";
             }
         }
     }

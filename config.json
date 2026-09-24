@@ -302,7 +302,7 @@
             "config": {
                 //workflow_directory: *.json blueprints loaded once at startup
                 "workflow_directory": "sapo/workflows",
-                //config_path: optional sapo-config.json (provider config, secrets, engine tunables)
+                //config_path: optional sapo-dev-config.json (provider config, secrets, engine tunables)
                 "config_path": "sapo/sapo-config.json",
                 //state_directory: file state store (used when redis_url is empty)
                 "state_directory": "sapo/state-store",
@@ -318,7 +318,7 @@
                 "redis_atomic_index": true,
                 //log_level: trace|debug|info|warn|error|off
                 "log_level": "info",
-                //default_workflow: fallback blueprint stem (sapo/workflows/<name>.json)
+                //default_workflow: fallback blueprint stem (sapo-dev/workflows/<name>.json)
                 "default_workflow": "default",
                 //blocking_threads: workers for blocking engine calls (0 => hardware default)
                 "blocking_threads": 8

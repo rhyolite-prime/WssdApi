@@ -17,11 +17,11 @@ namespace wssd_api::sapo_host {
 
 struct SapoSettings {
     /// Directory of *.json blueprints loaded once at startup.
-    std::string workflowDirectory = "sapo/workflows";
-    /// Optional sapo-config.json (provider config, secrets, engine tunables).
-    std::string configPath = "sapo/sapo-config.json";
+    std::string workflowDirectory = "sapo-dev/workflows";
+    /// Optional sapo-dev-config.json (provider config, secrets, engine tunables).
+    std::string configPath = "sapo-dev/sapo-dev-config.json";
     /// File state-store directory (used when no Redis URL is configured).
-    std::string stateDirectory = "sapo/state-store";
+    std::string stateDirectory = "sapo-dev/state-store";
     /// Redis URL for durable multi-node state ("", "host[:port]" or
     /// "redis://[[user]:pass@]host[:port][/db]"). Empty => file store.
     std::string redisUrl;
@@ -34,7 +34,7 @@ struct SapoSettings {
     bool redisAtomicIndex = true;
     /// trace|debug|info|warn|error|off — forwarded to the Sapo logger.
     std::string logLevel = "info";
-    /// Fallback blueprint stem: sapo/workflows/<name>.json.
+    /// Fallback blueprint stem: sapo-dev/workflows/<name>.json.
     std::string defaultWorkflowFile = "default";
     /// Threads for blocking engine calls; 0 => hardware-based default.
     std::size_t blockingThreads = 8;

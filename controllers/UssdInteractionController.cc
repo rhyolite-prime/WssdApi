@@ -87,8 +87,7 @@ Task<HttpResponsePtr> UssdInteractionController::handleHubtelUssdInteraction(Htt
         const auto interaction = wssd_api::sapo_host::adapters::normalizeHubtel(dto, *jsonBody);
         const auto result = co_await plugin->orchestrator().handle(interaction);
 
-        auto resp = HttpResponse::newHttpJsonResponse(
-            wssd_api::sapo_host::adapters::renderHubtel(dto, result));
+        auto resp = HttpResponse::newHttpJsonResponse(wssd_api::sapo_host::adapters::renderHubtel(dto, result));
         resp->setStatusCode(k200OK);
         co_return resp;
     } catch (const std::exception &e) {
