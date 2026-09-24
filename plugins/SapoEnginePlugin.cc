@@ -23,14 +23,14 @@ void SapoEnginePlugin::initAndStart(const Json::Value &config) {
 
     auto &engine = wssd_api::sapo_host::SapoEngineService::instance();
     if (!engine.configure(settings)) {
-        LOG_ERROR << "[sapo] engine configuration failed; USSD endpoints will answer unavailable";
+        LOG_ERROR << "[sapo-dev] engine configuration failed; USSD endpoints will answer unavailable";
     } else {
         const auto problems = engine.start();
         for (const auto &problem : problems) {
-            LOG_ERROR << "[sapo] " << problem;
+            LOG_ERROR << "[sapo-dev] " << problem;
         }
         if (!engine.running()) {
-            LOG_ERROR << "[sapo] engine did not start; USSD endpoints will answer unavailable";
+            LOG_ERROR << "[sapo-dev] engine did not start; USSD endpoints will answer unavailable";
         }
     }
 

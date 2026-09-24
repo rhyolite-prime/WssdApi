@@ -8,9 +8,9 @@
 //   1. wssd_registry by ussd_code, for the dial code first (most specific)
 //      and the gateway service key second; the row's `executable` column
 //      IS the Sapo blueprint JSON.
-//   2. sapo/workflows/<key>.json files (hot-reloadable through the engine's
+//   2. sapo-dev/workflows/<key>.json files (hot-reloadable through the engine's
 //      content-hash check in SapoEngineService::ensureBlueprint).
-//   3. sapo/workflows/<default>.json as the last-resort fallback menu.
+//   3. sapo-dev/workflows/<default>.json as the last-resort fallback menu.
 //
 // A resolved workflow whose blueprint text is empty is already registered
 // (startup-loaded file); anything else is (re)registered on demand.

@@ -20,7 +20,7 @@ namespace wssd_api::sapo_host {
 class DrogonLogSink final : public sapo::obs::ILogSink {
   public:
     void write(const sapo::obs::LogRecord &record) override {
-        std::string line = "[sapo:" + record.component + "] " + record.message;
+        std::string line = "[sapo-dev:" + record.component + "] " + record.message;
         if (!record.execution_id.empty()) {
             line += " exec=";
             line += record.execution_id;

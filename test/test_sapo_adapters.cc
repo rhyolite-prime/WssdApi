@@ -4,6 +4,7 @@
 
 #include <drogon/drogon_test.h>
 
+#include "nlohmann/json.hpp"
 #include "runtime/VirtualMachine.hpp"
 
 #include "domain_services/sapo/ProviderAdapters.h"
@@ -231,6 +232,6 @@ DROGON_TEST(SapoStartProblemSeverity) {
     CHECK(!SapoEngineService::isWarningProblem(
         "config: engine.state_redis must be a non-empty redis:// URL string"));
     CHECK(!SapoEngineService::isWarningProblem("config: cannot open config file 'x'"));
-    CHECK(!SapoEngineService::isWarningProblem("sapo engine is not configured"));
+    CHECK(!SapoEngineService::isWarningProblem("sapo-dev engine is not configured"));
     CHECK(!SapoEngineService::isWarningProblem(""));
 }
