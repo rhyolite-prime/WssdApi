@@ -1,70 +1,161 @@
 name: Build WSSD API for Ubuntu 22.X
 
+# Triggers match the actual default branch (origin/HEAD -> master). The previous
+# push:[dev] / pull_request:[main] combination never fired on master, so the
+# pipeline was silently dormant.
 on:
   push:
-    branches: [dev]
+    branches: [master, dev]
   pull_request:
-    branches: [main]
+    branches: [master]
+  workflow_dispatch:
+
+# Least privilege. `packages: read` is what lets the default GITHUB_TOKEN pull
+# the private Sapo Engine artifact from ghcr.io — it works because the package
+# is shared with this repository (Package settings -> Manage Actions access).
+# A repo-scoped token canNOT clone the private engine's *source*, which is why
+# the pipeline consumes a published artifact instead.
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Ubuntu 22.04's apt CMake is 3.22, but CMakeLists.txt requires >= 3.28 (and
+  # the engine's exported package uses 3.28-era import checks). Install a pinned
+  # 3.31 from Kitware rather than apt. Stay on 3.x: CMake 4 drops compatibility
+  # with older cmake_minimum_required floors used by third-party packages.
+  CMAKE_VERSION: 3.31.12
+  # Pinned so the Drogon cache key is meaningful and builds are reproducible.
+  DROGON_VERSION: v1.9.13
+  # A stable absolute path: Drogon's exported CMake package bakes in the install
+  # prefix, so a per-job temp dir would invalidate the cache on every run.
+  DROGON_PREFIX: /home/runner/drogon-prefix
+  SAPO_PREFIX_DIR: ${{ runner.temp }}/sapo-prefix
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
     steps:
-      # Step 1: Check out the repository code
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        # No submodules: the engine is consumed as a GitHub Packages artifact,
+        # not as a git submodule (there is no .gitmodules in this repo).
+
+      # Fail fast on a bad pin — before spending minutes on Drogon.
+      - name: Read pinned Sapo Engine version
+        id: sapo
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^[[:space:]]*SAPO_ENGINE_VERSION=//p' sapo-engine.lock | tail -n 1 | tr -d '[:space:]')"
+          if [[ -z "$version" ]]; then
+            echo "::error::sapo-engine.lock does not define SAPO_ENGINE_VERSION"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Pinned Sapo Engine version: $version"
+
+      # The one step that needs private-upstream access, and it needs no stored
+      # secret: GITHUB_TOKEN + a package shared with this repo.
+      - name: Fetch Sapo Engine artifact
+        env:
+          SAPO_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/fetch-sapo-engine.sh --dest "$SAPO_PREFIX_DIR" --version "${{ steps.sapo.outputs.version }}"
+
+      - name: Cache Drogon ${{ env.DROGON_VERSION }}
+        id: drogon-cache
+        uses: actions/cache@v4
         with:
-          submodules: recursive
+          path: ${{ env.DROGON_PREFIX }}
+          key: drogon-${{ env.DROGON_VERSION }}-ubuntu-22.04-postgres
 
-
-      # Step 2: Install dependencies for Drogon, PostgreSQL, and Redis
       - name: Install dependencies
         run: |
-          sudo apt update
-          sudo apt install -y cmake g++ libjsoncpp-dev uuid-dev openssl libssl-dev zlib1g-dev
-          sudo apt install postgresql libhiredis-dev  doxygen graphviz dia
-          
-          sudo apt install -y librabbitmq-dev
-          
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y g++ libjsoncpp-dev uuid-dev \
+            openssl libssl-dev zlib1g-dev libhiredis-dev librabbitmq-dev \
+            postgresql libpq-dev
+          # cmake comes from Kitware below (apt's 3.22 is below the 3.28 floor);
+          # doxygen/graphviz/dia dropped: nothing in the build consumes them.
 
-      # Step 3: Download and install Drogon
-      - name: Install Drogon
+      - name: Install CMake ${{ env.CMAKE_VERSION }}
         run: |
-          git clone https://github.com/drogonframework/drogon.git
-          cd drogon
-          git submodule update --init --recursive
-          mkdir build && cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON ..
-          make -j$(nproc)
-          sudo make install
-          cd ../..  # Move back to the root directory
+          set -euo pipefail
+          url="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz"
+          sudo mkdir -p /opt/cmake
+          curl -fsSL "$url" | sudo tar -xz -C /opt/cmake --strip-components=1
+          echo "/opt/cmake/bin" >> "$GITHUB_PATH"
+          /opt/cmake/bin/cmake --version | head -1
 
-      # Step 4: Remove any existing build directory to prevent CMake cache conflicts
+      - name: Build and install Drogon
+        if: steps.drogon-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --recursive --branch "$DROGON_VERSION" \
+            https://github.com/drogonframework/drogon.git "$RUNNER_TEMP/drogon-src"
+          cmake -S "$RUNNER_TEMP/drogon-src" -B "$RUNNER_TEMP/drogon-build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_POSTGRESQL=ON \
+            -DCMAKE_INSTALL_PREFIX="$DROGON_PREFIX"
+          cmake --build "$RUNNER_TEMP/drogon-build" -j"$(nproc)"
+          cmake --install "$RUNNER_TEMP/drogon-build"
+
       - name: Clean previous build
-        run: |
-          rm -rf build
-          mkdir build
+        run: rm -rf build
 
-      # Step 5: Build your application
-      - name: Build Application
+      # WSSD_SAPO_SOURCE=OFF: CI must link the pinned, published engine and may
+      # never fall back to cloning the private repo or building an unpinned one.
+      - name: Configure
         run: |
-          cd build
-          cmake ..
-          make
+          set -euo pipefail
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$DROGON_PREFIX" \
+            -DWSSD_SAPO_PREFIX="$SAPO_PREFIX_DIR" \
+            -DWSSD_SAPO_SOURCE=OFF
 
-      # Step 6: List files in the build directory
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      # Advisory: the engine validator reports blueprint cycles as WARNINGs by
+      # design (see docs/SAPO_INTEGRATION.md), so a non-zero exit here is not
+      # allowed to fail an otherwise good build.
+      - name: Validate Sapo blueprints
+        continue-on-error: true
+        run: |
+          sapoc="$SAPO_PREFIX_DIR/bin/sapoc"
+          [[ -x "$sapoc" ]] || { echo "no sapoc in artifact; skipping"; exit 0; }
+          shopt -s nullglob
+          for blueprint in sapo/workflows/*.json; do
+            echo "--- validating $blueprint"
+            "$sapoc" validate "$blueprint"
+          done
+
+      - name: Run unit tests
+        run: ctest --test-dir build --output-on-failure
+
       - name: List build directory files
-        run: |
-          cd build
-          ls -l
+        run: ls -l build
 
-      # Step 7: Upload the binary as an artifact using v3
       - name: Upload Binary
         uses: actions/upload-artifact@v4
         with:
           name: wssd-api
           path: build/WssdApi
+          if-no-files-found: error
 
-
-
+      - name: Build summary
+        run: |
+          {
+            echo "### WssdApi build"
+            echo ""
+            echo "| Component | Version |"
+            echo "|---|---|"
+            echo "| Sapo Engine | \`${{ steps.sapo.outputs.version }}\` (ghcr artifact) |"
+            echo "| Drogon | \`$DROGON_VERSION\` (cache hit: ${{ steps.drogon-cache.outputs.cache-hit }}) |"
+          } >> "$GITHUB_STEP_SUMMARY"

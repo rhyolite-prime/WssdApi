@@ -3,7 +3,8 @@
 WssdApi embeds the [Sapo Engine](https://github.com/rhyolite-prime/SapoEngine)
 as its USSD workflow runtime. One process-wide `VirtualMachine` serves every
 USSD turn; gateways keep their own wire models and the engine only ever sees
-provider-neutral JSON.
+provider-neutral JSON. The engine repository is **private** and is consumed as
+a published artifact, never cloned — see [Build](#build).
 
 ```
                 Nalo webhook                    Hubtel webhook
@@ -187,19 +188,92 @@ fallback). Keep Redis configuration in exactly one place: `redis_url` /
 
 ## Build
 
-CMake resolves the engine automatically:
+**The engine lives in a private repository**, so no build path may assume an
+anonymous clone works. The pinned version is declared once, in
+`sapo-engine.lock`:
 
-1. `vendor/sapo/lib/libsapo_core.a` — a `cmake --install` tree of SapoEngine
-   (the repo currently vendors headers + CMake config only; drop the built
-   `.a` here for hermetic offline builds), else
-2. `FetchContent` from `rhyolite-prime/SapoEngine` (`WSSD_SAPO_GIT_TAG`,
-   default `master`, with `SAPO_ENABLE_REDIS=ON`, tests off).
+```
+SAPO_ENGINE_VERSION=0.4.0
+```
+
+CMake enforces that exact version (`find_package(SapoEngine <v> EXACT)`), so a
+stale or hand-built engine fails at configure time instead of quietly changing
+behaviour.
+
+### Getting the engine
+
+The engine's release workflow publishes its `cmake --install` prefix as an OCI
+artifact to GitHub Packages (`ghcr.io/rhyolite-prime/sapo-engine:<version>`).
+Fetch it with:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+./scripts/fetch-sapo-engine.sh --dest build/sapo-prefix
+```
+
+In CI this needs **no stored secret**: the workflow's own `GITHUB_TOKEN`
+(`packages: read`) can pull the artifact because the package has been shared
+with this repository. That asymmetry is the whole design — a repo-scoped token
+cannot read another private repo's *source*, but it can read a *package* shared
+with it, so there is no PAT to mint, leak, or rotate.
+
+> One-time setup, in the SapoEngine package settings → **Manage Actions
+> access** → add `rhyolite-prime/WssdApi` with role *Read* (or set the package
+> visibility to *internal*). Until then every pull 403s however valid the token
+> is. The publishing workflow is checked in for reference at
+> [`docs/ci/sapo-engine-publish.yml`](ci/sapo-engine-publish.yml).
+
+### CMake resolution order
+
+1. **A prebuilt install tree**, from the first of these holding a *complete*
+   tree (`lib/libsapo_core.a` + `lib/cmake/SapoEngine/` + `bin/sapoc`):
+   `-DWSSD_SAPO_PREFIX=<dir>`, then `$SAPO_PREFIX`, then `vendor/sapo`. CI
+   passes `WSSD_SAPO_PREFIX` at the directory the fetch script unpacked.
+2. **A source build** via `FetchContent`, only when no prebuilt tree was found
+   and `WSSD_SAPO_SOURCE` permits it. This requires git credentials for the
+   private repo, and pre-flights them with `git ls-remote` (with
+   `GIT_TERMINAL_PROMPT=0`) so you get instructions rather than an opaque 403
+   or a hung credential prompt.
+
+`WSSD_SAPO_SOURCE` is `AUTO` (prebuilt, else source — the default for local
+dev), `ON` (source only, ignoring any prebuilt tree), or `OFF` (prebuilt only —
+what CI uses, so it can never build an unpinned engine).
+
+Committed under `vendor/sapo` are the **headers and the CMake package config
+only** — enough for the engine-free tests to compile, never enough to link. The
+binaries are git-ignored on purpose; the artifact is the delivery mechanism.
+
+### Local build
+
+```sh
+./scripts/fetch-sapo-engine.sh --dest build/sapo-prefix
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWSSD_SAPO_PREFIX=build/sapo-prefix
 cmake --build build -j"$(nproc)"
 ./build/WssdApi            # serves :5107 per config.json
 ```
+
+Requires CMake ≥ 3.28 (Ubuntu 22.04's apt CMake is 3.22) and Docker for the
+fetch script. Already built the engine yourself? Skip the script and point
+`-DWSSD_SAPO_PREFIX` at your own `cmake --install` tree.
+
+### CI
+
+`.github/workflows/build_wssd-api.yml` runs on `master`/`dev` pushes and PRs to
+`master` with `permissions: {contents: read, packages: read}`. It reads
+`sapo-engine.lock`, pulls the artifact **first** (a bad pin or an unshared
+package fails in seconds, not after a Drogon build), then builds Drogon
+`v1.9.13` into a cached prefix at `/home/runner/drogon-prefix`, configures with
+`-DWSSD_SAPO_SOURCE=OFF`, builds, validates the blueprints with the artifact's
+own `sapoc`, and runs `ctest`.
+
+### Bumping the engine
+
+1. Tag and publish the release in SapoEngine.
+2. Update `SAPO_ENGINE_VERSION` in `sapo-engine.lock`.
+3. Commit — CI verifies the artifact exists and matches before building.
+
+The artifact is a static archive, so the publishing workflow must keep using
+the same runner image and distro compiler as WssdApi's CI (`ubuntu-22.04`);
+toolchain drift between the two repos is an ABI bug, not a rebuild.
 
 ## Testing
 
@@ -226,3 +300,9 @@ cmake --build build -j"$(nproc)"
 | Hubtel session restarts mid-menu | State store lost (file store on an ephemeral disk, or Redis flushed) — use Redis in production |
 | Blueprint HTTP calls fail | Read the `[ussd] turn failed code=...` line: `HTTP_ERROR` = transport problem (DNS/TLS/refused/timeout — the message names the URL and cause), `HTTP_STATUS_ERROR` = downstream answered non-2xx, `VALIDATION_ERROR` = non-absolute URL in the blueprint (absolute `http(s)` URLs only). Redirects are followed (5 hops); express transient retries as node `retry` policies, not redials |
 | Logs show `resume failed ... restarting session` | Checkpoint expired between lookup and resume (gateway retry after a long pause) — expected, self-heals. Turn *execution* errors (e.g. `HTTP_ERROR` from a blueprint API call) no longer restart: they log `turn execution failed` with the underlying message instead |
+| CI fails at **Fetch Sapo Engine artifact** with a 403 | The ghcr package was never shared with this repository. SapoEngine package settings → *Manage Actions access* → add `rhyolite-prime/WssdApi` (Read). A perfectly valid `GITHUB_TOKEN` still 403s without this, because the token is scoped to WssdApi, not to the engine repo |
+| `Cannot reach https://github.com/rhyolite-prime/SapoEngine.git` at configure | CMake fell back to a source build and holds no credentials for the private repo. Run `./scripts/fetch-sapo-engine.sh --dest build/sapo-prefix` and pass `-DWSSD_SAPO_PREFIX=build/sapo-prefix`, or configure git `url.<…>.insteadOf` with a token as the error text shows |
+| `No usable SapoEngine 0.4.0 was found` at configure | No *complete* prebuilt tree in any candidate prefix while `WSSD_SAPO_SOURCE=OFF` forbids a source build. Fetch the artifact, or re-configure without `-DWSSD_SAPO_SOURCE=OFF` |
+| `SapoEngine prefix … does not provide version 0.4.0` | That prefix was built from a different engine version than `sapo-engine.lock` pins — the `EXACT` check rejecting a stale artifact is the feature. Re-fetch, or bump the lock file deliberately |
+| `skipping incomplete SapoEngine prefix …/vendor/sapo` | Expected and harmless: only headers + CMake package config are committed there, never `libsapo_core.a`. It only matters if it is the *only* prefix found (then see the "No usable SapoEngine" row) |
+| `CMake 3.28 or higher is required. You are running version 3.22.1` | Ubuntu 22.04's apt CMake is too old for this project. Install a pinned 3.31 from Kitware — the CI workflow already does |
