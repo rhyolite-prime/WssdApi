@@ -1,0 +1,83 @@
+[Unit]
+Description=WSSD API C++ Service
+Documentation=https://github.com/rhyolite-prime/WssdApi
+# network-online is the one that actually guarantees a routable address;
+# network.target only means "the networking stack has been brought up".
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Do not run a public HTTP service as root. Create the account once:
+#   sudo useradd --system --home /var/www/wssd-api --shell /usr/sbin/nologin wssd
+#   sudo chown -R wssd:www-data /var/www/wssd-api
+User=wssd
+Group=www-data
+UMask=0027
+
+WorkingDirectory=/var/www/wssd-api
+
+# The CI bundle (artifact "wssd-api-bundle") unpacks to:
+#   /var/www/wssd-api/bin/{wssd-api,WssdApi}   lib/   config/   sapo/
+# Start the LAUNCHER, not bin/WssdApi: it exports LD_LIBRARY_PATH for the
+# bundled c-ares/jsoncpp/libpq/hiredis/brotli shared objects. Running the raw
+# binary is what produced
+#   "error while loading shared libraries: libcares.so.2".
+#
+# If you deploy the bare binary at /var/www/wssd-api/WssdApi instead, keep your
+# old ExecStart and install the libraries system-wide:
+#   sudo apt-get install -y libc-ares2 libjsoncpp25 libpq5 libhiredis0.14 \
+#     libbrotli1 libssl3 zlib1g
+ExecStartPre=/bin/mkdir -p /var/www/wssd-api/logs /var/www/wssd-api/sapo/state-store
+ExecStart=/var/www/wssd-api/bin/wssd-api
+
+Restart=always
+RestartSec=5
+# Stop the 30-restarts-and-counting loop a broken deploy causes: give up after
+# 5 failures in 60s so the unit lands in "failed" and alerts instead of
+# hammering the journal forever.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+TimeoutStopSec=20
+KillSignal=SIGINT
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wssd-api
+
+# Secrets (DB/Redis credentials, provider tokens) belong in an env file that is
+# root-owned and 0640, never in the unit or in git.
+EnvironmentFile=-/etc/wssd-api/wssd-api.env
+
+# ---- Security hardening -----------------------------------------------------
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+# Everything the process writes: Drogon logs, Sapo file state-store checkpoints.
+ReadWritePaths=/var/www/wssd-api/logs /var/www/wssd-api/sapo
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectProc=invisible
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+# IPv4/IPv6/unix only — no raw packets, no exotic families.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+# MemoryDenyWriteExecute is intentionally NOT set: it is incompatible with the
+# JIT-style pages some allocators/TLS backends map, and Drogon gains nothing
+# from it. Re-enable only if you have verified the service starts with it.
+
+# ---- Resource limits --------------------------------------------------------
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
