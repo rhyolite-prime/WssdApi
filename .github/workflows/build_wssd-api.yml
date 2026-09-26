@@ -85,13 +85,22 @@ jobs:
       # exact install tree find_package(SapoEngine 0.4.0 EXACT) expects. Without
       # this step vendor/sapo only holds headers + the CMake config and the
       # configure step fails ("incomplete SapoEngine prefix").
+      # The script tries the ghcr.io package first and, when that does not exist
+      # (SapoEngine only publishes it on tag pushes / workflow_dispatch, so an
+      # untagged engine gives "manifest unknown"), falls back to the `sapo-dist`
+      # artifact of the engine's latest successful build. The fallback needs a
+      # token that can read the private engine repo: add SAPO_ENGINE_TOKEN as a
+      # repository secret — the default GITHUB_TOKEN is scoped to this repo only.
       - name: Fetch Sapo engine into vendor/sapo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
+          SAPO_ENGINE_TOKEN: ${{ secrets.SAPO_ENGINE_TOKEN }}
         run: |
           chmod +x scripts/fetch-sapo-engine.sh
-          ./scripts/fetch-sapo-engine.sh --dest "$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}"
+          ./scripts/fetch-sapo-engine.sh \
+            --mode auto \
+            --dest "$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}"
 
       - name: Show resolved engine version
         run: |
