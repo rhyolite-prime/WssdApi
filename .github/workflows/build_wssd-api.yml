@@ -1,142 +1,68 @@
-name: Build WSSD API for Ubuntu 22.X
+name: Build NSAA API for Ubuntu 22.X
 
 on:
   push:
-    branches: [master, dev]
+    branches: [dev]
   pull_request:
-    branches: [master]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  packages: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-env:
-  # Pinned CMake release from Kitware
-  CMAKE_VERSION: 3.31.6
-  DROGON_VERSION: v1.9.13
-  DROGON_PREFIX: /home/runner/drogon-prefix
+    branches: [main]
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    env:
-      # Moved runner context here where runner.temp is accessible
-      SAPO_PREFIX_DIR: ${{ runner.temp }}/sapo-prefix
 
     steps:
+      # Step 1: Check out the repository code
       - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Read pinned Sapo Engine version
-        id: sapo
-        run: |
-          set -euo pipefail
-          version="$(sed -n 's/^[[:space:]]*SAPO_ENGINE_VERSION=//p' sapo-engine.lock | tail -n 1 | tr -d '[:space:]')"
-          if [[ -z "$version" ]]; then
-            echo "::error::sapo-engine.lock does not define SAPO_ENGINE_VERSION"
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Pinned Sapo Engine version: $version"
-
-      - name: Fetch Sapo Engine artifact
-        env:
-          SAPO_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./scripts/fetch-sapo-engine.sh --dest "$SAPO_PREFIX_DIR" --version "${{ steps.sapo.outputs.version }}"
-
-      - name: Cache Drogon ${{ env.DROGON_VERSION }}
-        id: drogon-cache
-        uses: actions/cache@v4
+        uses: actions/checkout@v3
         with:
-          path: ${{ env.DROGON_PREFIX }}
-          key: drogon-${{ env.DROGON_VERSION }}-ubuntu-22.04-gcc13-postgres
+          submodules: recursive
 
-      - name: Install Toolchain (GCC 13) and Dependencies
+
+      # Step 2: Install dependencies for Drogon, PostgreSQL, and Redis
+      - name: Install dependencies
         run: |
-          set -euo pipefail
-          sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
-          sudo apt-get update
-          sudo apt-get install -y gcc-13 g++-13 libjsoncpp-dev uuid-dev \
-            openssl libssl-dev zlib1g-dev libhiredis-dev librabbitmq-dev \
-            postgresql libpq-dev
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100 --slave /usr/bin/g++ g++ /usr/bin/g++-13
+          sudo apt update
+          sudo apt install -y cmake g++ libjsoncpp-dev uuid-dev openssl libssl-dev zlib1g-dev
+          sudo apt install postgresql libhiredis-dev  doxygen graphviz dia
+        
+      
 
-      - name: Install CMake ${{ env.CMAKE_VERSION }}
+      # Step 3: Download and install Drogon
+      - name: Install Drogon
         run: |
-          set -euo pipefail
-          url="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz"
-          sudo mkdir -p /opt/cmake
-          curl -fsSL "$url" | sudo tar -xz -C /opt/cmake --strip-components=1
-          echo "/opt/cmake/bin" >> "$GITHUB_PATH"
-          /opt/cmake/bin/cmake --version | head -1
+          git clone https://github.com/drogonframework/drogon.git
+          cd drogon
+          git submodule update --init --recursive
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON ..
+          make -j$(nproc)
+          sudo make install
+          cd ../..  # Move back to the root directory
 
-      - name: Build and install Drogon
-        if: steps.drogon-cache.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-          git clone --depth 1 --recursive --branch "$DROGON_VERSION" \
-            https://github.com/drogonframework/drogon.git "$RUNNER_TEMP/drogon-src"
-          cmake -S "$RUNNER_TEMP/drogon-src" -B "$RUNNER_TEMP/drogon-build" \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_COMPILER=g++-13 \
-            -DBUILD_POSTGRESQL=ON \
-            -DCMAKE_INSTALL_PREFIX="$DROGON_PREFIX"
-          cmake --build "$RUNNER_TEMP/drogon-build" -j"$(nproc)"
-          cmake --install "$RUNNER_TEMP/drogon-build"
-
+      # Step 4: Remove any existing build directory to prevent CMake cache conflicts
       - name: Clean previous build
-        run: rm -rf build
-
-      - name: Configure
         run: |
-          set -euo pipefail
-          cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_COMPILER=g++-13 \
-            -DCMAKE_PREFIX_PATH="$DROGON_PREFIX" \
-            -DWSSD_SAPO_PREFIX="$SAPO_PREFIX_DIR" \
-            -DWSSD_SAPO_SOURCE=OFF
+          rm -rf build
+          mkdir build
 
-      - name: Build
-        run: cmake --build build -j"$(nproc)"
-
-      - name: Validate Sapo blueprints
-        continue-on-error: true
+      # Step 5: Build your application
+      - name: Build Application
         run: |
-          sapoc="$SAPO_PREFIX_DIR/bin/sapoc"
-          [[ -x "$sapoc" ]] || { echo "no sapoc in artifact; skipping"; exit 0; }
-          shopt -s nullglob
-          for blueprint in sapo/workflows/*.json; do
-            echo "--- validating $blueprint"
-            "$sapoc" validate "$blueprint"
-          done
+          cd build
+          cmake ..
+          make
 
-      - name: Run unit tests
-        run: ctest --test-dir build --output-on-failure
-
+      # Step 6: List files in the build directory
       - name: List build directory files
-        run: ls -l build
+        run: |
+          cd build
+          ls -l
 
+      # Step 7: Upload the binary as an artifact using v3
       - name: Upload Binary
         uses: actions/upload-artifact@v4
         with:
           name: wssd-api
           path: build/WssdApi
-          if-no-files-found: error
 
-      - name: Build summary
-        run: |
-          {
-            echo "### WssdApi build summary"
-            echo ""
-            echo "| Component | Version |"
-            echo "|---|---|"
-            echo "| Sapo Engine | \`${{ steps.sapo.outputs.version }}\` (ghcr artifact) |"
-            echo "| Drogon | \`$DROGON_VERSION\` (cache hit: ${{ steps.drogon-cache.outputs.cache-hit }}) |"
-            echo "| Compiler | \`g++-13 (C++23)\` |"
-          } >> "$GITHUB_STEP_SUMMARY"
+
