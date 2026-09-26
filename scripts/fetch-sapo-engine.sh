@@ -293,6 +293,9 @@ missing=()
 [[ -f "${DEST}/lib/cmake/SapoEngine/SapoEngineConfig.cmake" ]] ||
     missing+=("lib/cmake/SapoEngine/SapoEngineConfig.cmake")
 [[ -d "${DEST}/include/sapo" ]] || missing+=("include/sapo/")
+# Without the version file find_package(SapoEngine <ver> EXACT) can never match.
+[[ -f "${DEST}/lib/cmake/SapoEngine/SapoEngineConfigVersion.cmake" ]] ||
+    missing+=("lib/cmake/SapoEngine/SapoEngineConfigVersion.cmake")
 
 # SapoEngineTargets-release.cmake registers an import check on bin/sapoc, so a
 # tree without it makes find_package() FATAL_ERROR with a confusing message.

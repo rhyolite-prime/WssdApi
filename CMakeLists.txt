@@ -179,22 +179,51 @@ foreach(_sapo_cand IN LISTS _sapo_candidates)
     unset(SapoEngine_DIR)
     unset(SapoEngine_DIR CACHE)
     find_package(SapoEngine ${_sapo_find_args} PATHS "${_sapo_cand}" NO_DEFAULT_PATH)
-    if(SapoEngine_FOUND AND TARGET Sapo::sapo_core)
-        set(WSSD_SAPO_TARGET Sapo::sapo_core)
+    # The installed package exports the engine as Sapo::core (SapoEngineTargets
+    # .cmake); older/in-tree builds called it Sapo::sapo_core or sapo_core.
+    # Accept all of them — checking only one name made a perfectly good prefix
+    # look like a version mismatch.
+    set(_sapo_found_target "")
+    foreach(_sapo_name IN ITEMS Sapo::core Sapo::sapo_core sapo_core)
+        if(TARGET ${_sapo_name})
+            set(_sapo_found_target ${_sapo_name})
+            break()
+        endif()
+    endforeach()
+    unset(_sapo_name)
+    if(SapoEngine_FOUND AND _sapo_found_target)
+        set(WSSD_SAPO_TARGET ${_sapo_found_target})
         message(STATUS "WssdApi: using prebuilt SapoEngine "
-                "${WSSD_SAPO_VERSION} from ${_sapo_cand}")
+                "${WSSD_SAPO_VERSION} from ${_sapo_cand} (target ${WSSD_SAPO_TARGET})")
+    elseif(SapoEngine_FOUND)
+        set(_sapo_stale "${_sapo_cand}")
+        message(STATUS "WssdApi: SapoEngine prefix ${_sapo_cand} was found but exports "
+                "no known engine target (expected one of Sapo::core, Sapo::sapo_core, sapo_core)")
     else()
         # Config present but rejected: almost always a version mismatch against
         # the lock file, which is exactly what EXACT is here to catch.
         set(_sapo_stale "${_sapo_cand}")
-        message(STATUS "WssdApi: SapoEngine prefix ${_sapo_cand} does not provide "
-                "version ${WSSD_SAPO_VERSION} (see sapo-engine.lock)")
+        set(_sapo_cand_version "unknown")
+        if(EXISTS "${_sapo_cand}/lib/cmake/SapoEngine/SapoEngineConfigVersion.cmake")
+            file(STRINGS "${_sapo_cand}/lib/cmake/SapoEngine/SapoEngineConfigVersion.cmake"
+                    _sapo_cand_version_line REGEX "^set\\(PACKAGE_VERSION ")
+            if(_sapo_cand_version_line)
+                list(GET _sapo_cand_version_line 0 _sapo_cand_version)
+                string(REGEX REPLACE "^set\\(PACKAGE_VERSION[ \t]*\"([^\"]*)\".*$" "\\1"
+                        _sapo_cand_version "${_sapo_cand_version}")
+            endif()
+            unset(_sapo_cand_version_line)
+        endif()
+        message(STATUS "WssdApi: SapoEngine prefix ${_sapo_cand} provides version "
+                "${_sapo_cand_version}, not the pinned ${WSSD_SAPO_VERSION} (see sapo-engine.lock)")
+        unset(_sapo_cand_version)
     endif()
+    unset(_sapo_found_target)
 endforeach()
 unset(_sapo_cand)
 
 if(WSSD_SAPO_TARGET)
-    get_target_property(_sapo_incs Sapo::sapo_core INTERFACE_INCLUDE_DIRECTORIES)
+    get_target_property(_sapo_incs ${WSSD_SAPO_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
     if(_sapo_incs)
         list(APPEND WSSD_SAPO_INCLUDE_DIRS ${_sapo_incs})
     endif()
@@ -253,7 +282,9 @@ elseif(NOT WSSD_SAPO_SOURCE STREQUAL "OFF")
             GIT_TAG "${WSSD_SAPO_GIT_TAG}"
             GIT_SHALLOW TRUE)
     FetchContent_MakeAvailable(sapo_engine)
-    if(TARGET Sapo::sapo_core)
+    if(TARGET Sapo::core)
+        set(WSSD_SAPO_TARGET Sapo::core)
+    elseif(TARGET Sapo::sapo_core)
         set(WSSD_SAPO_TARGET Sapo::sapo_core)
     elseif(TARGET sapo_core)
         set(WSSD_SAPO_TARGET sapo_core)
