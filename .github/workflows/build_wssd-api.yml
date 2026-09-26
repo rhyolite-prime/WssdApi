@@ -7,18 +7,19 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# The Sapo engine is consumed as a GitHub Packages (ghcr.io) OCI artifact, so
-# the job token needs read access to packages as well as the repo contents.
 permissions:
   contents: read
-  packages: read
 
 env:
   BUILD_TYPE: Release
-  # Prebuilt engine prefix. The repo tracks vendor/sapo's headers and CMake
-  # package config; the binaries (lib/libsapo_core.a, bin/sapoc) are gitignored
-  # and materialised here by scripts/fetch-sapo-engine.sh.
+  # The engine is built from source and installed here with
+  # `cmake --install build --prefix vendor/sapo`, exactly like the local
+  # workflow. The repo tracks vendor/sapo's headers and CMake package config;
+  # the binaries (lib/libsapo_core.a, bin/sapoc) are gitignored and produced by
+  # the install step below.
   SAPO_PREFIX_DIR: vendor/sapo
+  SAPO_ENGINE_REPO: https://github.com/rhyolite-prime/SapoEngine.git
+  SAPO_ENGINE_REF: master
 
 jobs:
   build:
@@ -96,32 +97,73 @@ jobs:
           echo "CMAKE_PREFIX_PATH=$HOME/drogon-install" >> "$GITHUB_ENV"
           echo "LD_LIBRARY_PATH=$HOME/drogon-install/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
 
-      # Step 5: Materialise the prebuilt Sapo engine into vendor/sapo.
-      # The published artifact carries bin/, include/, lib/ and share/, i.e. the
-      # exact install tree find_package(SapoEngine 0.4.0 EXACT) expects. Without
-      # this step vendor/sapo only holds headers + the CMake config and the
-      # configure step fails ("incomplete SapoEngine prefix").
-      # The script tries the ghcr.io package first and, when that does not exist
-      # (SapoEngine only publishes it on tag pushes / workflow_dispatch, so an
-      # untagged engine gives "manifest unknown"), falls back to the `sapo-dist`
-      # artifact of the engine's latest successful build. The fallback needs a
-      # token that can read the private engine repo: add SAPO_ENGINE_TOKEN as a
-      # repository secret — the default GITHUB_TOKEN is scoped to this repo only.
-      - name: Fetch Sapo engine into vendor/sapo
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_ACTOR: ${{ github.actor }}
-          SAPO_ENGINE_TOKEN: ${{ secrets.SAPO_ENGINE_TOKEN }}
+      # Step 5: Build the Sapo engine and install it into vendor/sapo.
+      #
+      # Same three commands used locally:
+      #   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSAPO_ENABLE_CPR=OFF \
+      #         -DSAPO_ENABLE_REDIS=ON -DSAPO_BUILD_TESTS=OFF
+      #   cmake --build build -j$(nproc)
+      #   cmake --install build --prefix sapo
+      # The resulting prefix is dropped in vendor/sapo, where WssdApi's
+      # CMakeLists already looks for it, and the app then builds like any other
+      # Drogon project.
+      #
+      # The install tree is cached against the engine commit, so a run only
+      # rebuilds the engine when SapoEngine actually moved.
+      - name: Resolve Sapo engine commit
         run: |
-          chmod +x scripts/fetch-sapo-engine.sh
-          ./scripts/fetch-sapo-engine.sh \
-            --mode auto \
-            --dest "$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}"
+          set -euo pipefail
+          SHA="$(git ls-remote "$SAPO_ENGINE_REPO" "refs/heads/${SAPO_ENGINE_REF}" | cut -f1)"
+          [[ -n "$SHA" ]] || { echo "cannot resolve ${SAPO_ENGINE_REF} in ${SAPO_ENGINE_REPO}"; exit 1; }
+          echo "SAPO_ENGINE_SHA=$SHA" >> "$GITHUB_ENV"
+          echo "Sapo engine ${SAPO_ENGINE_REF} = $SHA"
 
-      - name: Show resolved engine version
+      - name: Cache Sapo engine install tree
+        id: cache-sapo
+        uses: actions/cache@v4
+        with:
+          path: vendor/sapo
+          key: sapo-${{ runner.os }}-gcc13-${{ env.SAPO_ENGINE_SHA }}
+
+      - name: Build and install Sapo engine into vendor/sapo
+        if: steps.cache-sapo.outputs.cache-hit != 'true'
         run: |
-          grep -m1 '^SAPO_ENGINE_VERSION=' sapo-engine.lock
-          ls -l "${SAPO_PREFIX_DIR}/lib" "${SAPO_PREFIX_DIR}/bin"
+          set -euo pipefail
+          SRC="$RUNNER_TEMP/SapoEngine"
+          rm -rf "$SRC"
+          git clone --depth 1 --branch "$SAPO_ENGINE_REF" "$SAPO_ENGINE_REPO" "$SRC"
+          cmake -S "$SRC" -B "$SRC/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-13 \
+            -DCMAKE_CXX_COMPILER=g++-13 \
+            -DSAPO_ENABLE_CPR=OFF \
+            -DSAPO_ENABLE_REDIS=ON \
+            -DSAPO_BUILD_TESTS=OFF
+          cmake --build "$SRC/build" -j "$(nproc)"
+          # Keep the tracked headers/config from being mixed with a stale build.
+          rm -rf "$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}"
+          cmake --install "$SRC/build" --prefix "$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}"
+
+      - name: Verify the engine prefix
+        run: |
+          set -euo pipefail
+          PREFIX="$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}"
+          test -f "$PREFIX/lib/libsapo_core.a"
+          test -f "$PREFIX/lib/cmake/SapoEngine/SapoEngineConfig.cmake"
+          test -d "$PREFIX/include/sapo"
+          # sapoc is referenced by SapoEngineTargets-release.cmake's import check.
+          test -e "$PREFIX/bin/sapoc"
+          # sapo-engine.lock is enforced with find_package(... EXACT): surface a
+          # drift here, where the message is obvious, not inside CMake later.
+          PINNED="$(sed -n 's/^[[:space:]]*SAPO_ENGINE_VERSION=//p' sapo-engine.lock | tail -n1 | tr -d '[:space:]')"
+          BUILT="$(sed -n 's/^set(PACKAGE_VERSION[[:space:]]*"\(.*\)").*/\1/p' \
+            "$PREFIX/lib/cmake/SapoEngine/SapoEngineConfigVersion.cmake" | head -n1)"
+          echo "engine built: ${BUILT}   sapo-engine.lock pins: ${PINNED}"
+          if [[ "$BUILT" != "$PINNED" ]]; then
+            echo "::error::SapoEngine ${SAPO_ENGINE_REF} builds ${BUILT} but sapo-engine.lock pins ${PINNED}. Update sapo-engine.lock (one line) or point SAPO_ENGINE_REF at the matching tag."
+            exit 1
+          fi
+          ls -l "$PREFIX/lib" "$PREFIX/bin"
 
       # Step 6: Configure (no CMake cache can survive between runs, but keep the
       # explicit clean so a cached workspace can never poison the configure)
@@ -153,9 +195,12 @@ jobs:
       # Step 10: Package for deployment.
       #
       # Two products, one build:
-      #   * dist/wssd-api/          — the unpacked tree (tar.gz artifact)
-      #   * wssd-api.run            — ONE self-contained executable file:
-      #                               shell stub + embedded tar payload.
+      #   * build/WssdApi  — the bare binary (artifact "wssd-api"), for hosts
+      #                      that already have the runtime libraries installed
+      #   * wssd-api.run   — ONE self-contained executable file: shell stub +
+      #                      embedded tar payload (artifact "wssd-api-run").
+      #                      `wssd-api.run --extract DIR` reproduces the tree,
+      #                      so no separate tarball artifact is published.
       #
       # A truly static single ELF is not on the table: Drogon's PostgreSQL
       # backend needs libpq, whose static build pulls in Kerberos/LDAP archives
@@ -201,7 +246,6 @@ jobs:
 
           ( cd "$DIST" && ls -1 lib ) > "$DIST/runtime-deps.txt"
           ldd build/WssdApi > "$DIST/ldd.txt" || true
-          tar -C "$GITHUB_WORKSPACE/dist" -czf "$GITHUB_WORKSPACE/wssd-api-bundle.tar.gz" wssd-api
           echo "--- bundled libraries ---"; cat "$DIST/runtime-deps.txt"
 
       # Step 11: fold the whole bundle into ONE executable file.
@@ -228,13 +272,6 @@ jobs:
         with:
           name: wssd-api
           path: build/WssdApi
-          if-no-files-found: error
-
-      - name: Upload deployable bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: wssd-api-bundle
-          path: wssd-api-bundle.tar.gz
           if-no-files-found: error
 
       - name: Upload single-file executable

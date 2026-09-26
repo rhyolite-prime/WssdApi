@@ -5,7 +5,6 @@ CI (`.github/workflows/build_wssd-api.yml`) publishes two artifacts:
 | artifact | contents | use it when |
 |---|---|---|
 | `wssd-api` | the bare `WssdApi` ELF | the host already has every runtime library |
-| `wssd-api-bundle` | `wssd-api-bundle.tar.gz` — binary + bundled `lib/` + launcher + config | you want the tree on disk, managed by rsync/Ansible |
 | `wssd-api-run` | **`wssd-api.run` — one executable file containing everything** | **recommended**: copy one file, run it |
 
 The binary is linked with `-static-libstdc++ -static-libgcc`, so the GCC 13
@@ -45,7 +44,11 @@ Caveat: the runtime directory must be writable once, and it needs exec
 permission — if `/opt` is mounted `noexec`, point `WSSD_RUNTIME_DIR` somewhere
 that is not.
 
-## Bundle install (tree on disk)
+## Tree-on-disk install
+
+`wssd-api.run --extract /var/www/wssd-api` gives you the same unpacked bundle
+(binary + `lib/` + launcher + configs) if you prefer to manage a directory with
+rsync/Ansible rather than a single file.
 
 ```bash
 sudo useradd --system --home /var/www/wssd-api --shell /usr/sbin/nologin wssd   # once
