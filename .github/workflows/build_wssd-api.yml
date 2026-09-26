@@ -1,10 +1,24 @@
-name: Build WSSD API for Ubuntu 22.X
+name: Build NSAA API for Ubuntu 22.X
 
 on:
   push:
     branches: [dev]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+# The Sapo engine is consumed as a GitHub Packages (ghcr.io) OCI artifact, so
+# the job token needs read access to packages as well as the repo contents.
+permissions:
+  contents: read
+  packages: read
+
+env:
+  BUILD_TYPE: Release
+  # Prebuilt engine prefix. The repo tracks vendor/sapo's headers and CMake
+  # package config; the binaries (lib/libsapo_core.a, bin/sapoc) are gitignored
+  # and materialised here by scripts/fetch-sapo-engine.sh.
+  SAPO_PREFIX_DIR: vendor/sapo
 
 jobs:
   build:
@@ -13,56 +27,114 @@ jobs:
     steps:
       # Step 1: Check out the repository code
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
-
 
       # Step 2: Install dependencies for Drogon, PostgreSQL, and Redis
       - name: Install dependencies
         run: |
-          sudo apt update
-          sudo apt install -y cmake g++ libjsoncpp-dev uuid-dev openssl libssl-dev zlib1g-dev
-          sudo apt install libhiredis-dev  doxygen graphviz dia
-          
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            g++ git ca-certificates curl gnupg pkg-config make \
+            libjsoncpp-dev uuid-dev openssl libssl-dev zlib1g-dev \
+            libpq-dev postgresql libhiredis-dev \
+            libc-ares-dev libbrotli-dev doxygen graphviz dia
 
-      # Step 3: Download and install Drogon
-      - name: Install Drogon
+      # Step 3: CMake >= 3.28 (ubuntu-22.04 ships 3.22, the project requires 3.28)
+      - name: Install modern CMake
         run: |
-          git clone https://github.com/drogonframework/drogon.git
-          cd drogon
-          git submodule update --init --recursive
-          mkdir build && cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON ..
-          make -j$(nproc)
-          sudo make install
-          cd ../..  # Move back to the root directory
+          curl -fsSL https://apt.kitware.com/keys/kitware-archive-latest.asc \
+            | sudo gpg --dearmor -o /usr/share/keyrings/kitware-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main" \
+            | sudo tee /etc/apt/sources.list.d/kitware.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y cmake
+          cmake --version
 
-      # Step 4: Remove any existing build directory to prevent CMake cache conflicts
-      - name: Clean previous build
+      # Step 4: Drogon (cached — a full build takes several minutes)
+      - name: Cache Drogon install
+        id: cache-drogon
+        uses: actions/cache@v4
+        with:
+          path: ~/drogon-install
+          key: drogon-${{ runner.os }}-ubuntu22.04-v1.9.7
+
+      - name: Build Drogon
+        if: steps.cache-drogon.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch v1.9.7 --recurse-submodules --shallow-submodules \
+            https://github.com/drogonframework/drogon.git "$RUNNER_TEMP/drogon"
+          cmake -S "$RUNNER_TEMP/drogon" -B "$RUNNER_TEMP/drogon/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$HOME/drogon-install" \
+            -DBUILD_POSTGRESQL=ON \
+            -DBUILD_EXAMPLES=OFF \
+            -DBUILD_CTL=ON
+          cmake --build "$RUNNER_TEMP/drogon/build" -j "$(nproc)"
+          cmake --install "$RUNNER_TEMP/drogon/build"
+
+      - name: Export Drogon to the environment
+        run: |
+          echo "$HOME/drogon-install/bin" >> "$GITHUB_PATH"
+          echo "CMAKE_PREFIX_PATH=$HOME/drogon-install" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$HOME/drogon-install/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+
+      # Step 5: Materialise the prebuilt Sapo engine into vendor/sapo.
+      # The published artifact carries bin/, include/, lib/ and share/, i.e. the
+      # exact install tree find_package(SapoEngine 0.4.0 EXACT) expects. Without
+      # this step vendor/sapo only holds headers + the CMake config and the
+      # configure step fails ("incomplete SapoEngine prefix").
+      # The script tries the ghcr.io package first and, when that does not exist
+      # (SapoEngine only publishes it on tag pushes / workflow_dispatch, so an
+      # untagged engine gives "manifest unknown"), falls back to the `sapo-dist`
+      # artifact of the engine's latest successful build. The fallback needs a
+      # token that can read the private engine repo: add SAPO_ENGINE_TOKEN as a
+      # repository secret — the default GITHUB_TOKEN is scoped to this repo only.
+      - name: Fetch Sapo engine into vendor/sapo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          SAPO_ENGINE_TOKEN: ${{ secrets.SAPO_ENGINE_TOKEN }}
+        run: |
+          chmod +x scripts/fetch-sapo-engine.sh
+          ./scripts/fetch-sapo-engine.sh \
+            --mode auto \
+            --dest "$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}"
+
+      - name: Show resolved engine version
+        run: |
+          grep -m1 '^SAPO_ENGINE_VERSION=' sapo-engine.lock
+          ls -l "${SAPO_PREFIX_DIR}/lib" "${SAPO_PREFIX_DIR}/bin"
+
+      # Step 6: Configure (no CMake cache can survive between runs, but keep the
+      # explicit clean so a cached workspace can never poison the configure)
+      - name: Configure
         run: |
           rm -rf build
-          mkdir build
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+            -DCMAKE_PREFIX_PATH="$HOME/drogon-install" \
+            -DWSSD_SAPO_PREFIX="$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}" \
+            -DWSSD_SAPO_SOURCE=OFF
 
-      # Step 5: Build your application
-      - name: Build Application
-        run: |
-          cd build
-          cmake ..
-          make
+      # Step 7: Build your application
+      - name: Build
+        run: cmake --build build -j "$(nproc)"
 
-      # Step 6: List files in the build directory
+      # Step 8: Tests
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure || echo "no tests registered"
+
+      # Step 9: List files in the build directory
       - name: List build directory files
-        run: |
-          cd build
-          ls -l
+        run: ls -l build
 
-      # Step 7: Upload the binary as an artifact using v3
+      # Step 10: Upload the binary as an artifact
       - name: Upload Binary
         uses: actions/upload-artifact@v4
         with:
           name: wssd-api
           path: build/WssdApi
-
-
-
+          if-no-files-found: error

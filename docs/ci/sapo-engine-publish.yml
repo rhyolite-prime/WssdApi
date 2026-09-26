@@ -1,0 +1,182 @@
+# ============================================================================
+# REFERENCE FILE — this workflow belongs in the SapoEngine repository, NOT here.
+# It is kept under docs/ci/ so WssdApi documents the artifact contract it
+# depends on without GitHub Actions trying to run it in this repo.
+#
+# Copy to: SapoEngine/.github/workflows/publish-engine-artifact.yml
+#
+# WHAT IT PRODUCES
+#   An OCI artifact on ghcr.io carrying SapoEngine's `cmake --install` prefix:
+#
+#     /opt/sapo/bin/sapoc                              <- REQUIRED: the export
+#     /opt/sapo/include/sapo/**                           set import-checks it
+#     /opt/sapo/lib/libsapo_core.a
+#     /opt/sapo/lib/cmake/SapoEngine/SapoEngine*.cmake
+#     /opt/sapo/share/sapo/workflow.schema.json
+#
+#   WssdApi unpacks it with scripts/fetch-sapo-engine.sh and consumes it via
+#   find_package(SapoEngine <version> EXACT CONFIG).
+#
+# ONE-TIME SETUP AFTER THE FIRST PUSH
+#   The artifact is private, and a consumer repo's GITHUB_TOKEN is scoped to
+#   that consumer repo — it cannot read another private repo's source, but it
+#   CAN read a package shared with it. So:
+#     https://github.com/orgs/rhyolite-prime/packages
+#       -> sapo-engine -> Package settings -> Manage Actions access
+#       -> add "rhyolite-prime/WssdApi" with role Read
+#   (Or set the package visibility to "internal" to share it org-wide.)
+#   Until this is done the WssdApi build fails at "Fetch Sapo Engine artifact"
+#   with a 403 no matter how correct its token is.
+#
+# ABI NOTE
+#   runs-on must stay ubuntu-22.04 to match WssdApi's build runner: the engine
+#   is consumed as a static archive, so libstdc++/glibc/compiler must agree.
+#   Change both together, or bump the artifact's major version.
+# ============================================================================
+name: Publish engine artifact
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to publish (e.g. 0.4.0). Defaults to the project version.'
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # Keep in lockstep with .github/workflows/build_wssd-api.yml in WssdApi.
+  CMAKE_VERSION: 3.31.12
+  IMAGE: ghcr.io/rhyolite-prime/sapo-engine
+  STAGE: /home/runner/sapo-stage
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y g++ libjsoncpp-dev uuid-dev \
+            openssl libssl-dev zlib1g-dev libhiredis-dev
+
+      # Must match WssdApi's CI exactly (same CMake, same runner image, same
+      # distro g++): the engine is consumed as a static archive, so toolchain
+      # drift between the two repos is an ABI bug, not a rebuild.
+      - name: Install CMake ${{ env.CMAKE_VERSION }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz"
+          sudo mkdir -p /opt/cmake
+          curl -fsSL "$url" | sudo tar -xz -C /opt/cmake --strip-components=1
+          echo "/opt/cmake/bin" >> "$GITHUB_PATH"
+          /opt/cmake/bin/cmake --version | head -1
+
+      - name: Resolve version
+        id: version
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#refs/tags/}"
+          fi
+          version="${version#v}"                       # tags are vX.Y.Z, artifacts are X.Y.Z
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::cannot derive a semver artifact tag from '${version}'"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing Sapo Engine ${version}"
+
+      # Same feature flags WssdApi builds the engine with when it falls back to
+      # FetchContent, so the artifact and a source build behave identically.
+      - name: Configure
+        run: |
+          set -euo pipefail
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$STAGE" \
+            -DSAPO_ENABLE_REDIS=ON \
+            -DSAPO_ENABLE_CPR=OFF \
+            -DSAPO_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Install into the staging prefix
+        run: cmake --install build
+
+      # Guard the contract WssdApi depends on: a missing bin/sapoc makes the
+      # consumer's find_package() abort with a confusing import-check error, and
+      # a version mismatch makes find_package(... EXACT) reject the artifact.
+      - name: Verify artifact contract
+        run: |
+          set -euo pipefail
+          for required in \
+              lib/libsapo_core.a \
+              lib/cmake/SapoEngine/SapoEngineConfig.cmake \
+              lib/cmake/SapoEngine/SapoEngineConfigVersion.cmake \
+              bin/sapoc; do
+            [[ -e "$STAGE/$required" ]] || {
+              echo "::error::install tree is missing $required (CMAKE_INSTALL_PREFIX=$STAGE)"; exit 1; }
+          done
+          published="$(sed -n 's/^set(PACKAGE_VERSION[[:space:]]*"\(.*\)").*/\1/p' \
+            "$STAGE/lib/cmake/SapoEngine/SapoEngineConfigVersion.cmake" | head -n 1)"
+          if [[ "$published" != "${{ steps.version.outputs.version }}" ]]; then
+            echo "::error::PACKAGE_VERSION is '${published}' but the artifact tag is \
+          '${{ steps.version.outputs.version }}' — bump the project version or retag"
+            exit 1
+          fi
+
+      - name: Package the prefix as an OCI artifact
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/Dockerfile" <<'DOCKERFILE'
+          FROM scratch
+          COPY stage/ /opt/sapo/
+          DOCKERFILE
+          mkdir -p "$RUNNER_TEMP/context"
+          mv "$RUNNER_TEMP/Dockerfile" "$RUNNER_TEMP/context/Dockerfile"
+          cp -a "$STAGE" "$RUNNER_TEMP/context/stage"
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ runner.temp }}/context
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          provenance: false
+
+      - name: Summary
+        run: |
+          {
+            echo "### Published Sapo Engine ${{ steps.version.outputs.version }}"
+            echo ""
+            echo "- \`${{ env.IMAGE }}:${{ steps.version.outputs.version }}\`"
+            echo "- \`${{ env.IMAGE }}:sha-${{ github.sha }}\`"
+            echo ""
+            echo "Consume it from WssdApi by setting \`SAPO_ENGINE_VERSION=${{ steps.version.outputs.version }}\`"
+            echo "in \`sapo-engine.lock\`."
+            echo ""
+            echo "Reminder: Package settings -> Manage Actions access must include"
+            echo "\`rhyolite-prime/WssdApi\` (Read) or the consumer's GITHUB_TOKEN gets a 403."
+          } >> "$GITHUB_STEP_SUMMARY"

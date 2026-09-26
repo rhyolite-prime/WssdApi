@@ -22,7 +22,7 @@
 
 # Libraries
 *.lib
-*.a
+#*.a
 *.la
 *.lo
 
@@ -33,7 +33,7 @@
 *.dylib
 
 # Executables
-*.exe
+#*.exe
 *.out
 *.app
 *.i*86
@@ -564,3 +564,14 @@ FodyWeavers.xsd
 # WssdApi: Sapo engine runtime state (file state-store checkpoints) and logs
 /sapo/state-store/
 *.sapo.log
+
+# WssdApi: Sapo Engine prebuilt prefixes. The engine lives in a PRIVATE repo and
+# is consumed as a GitHub Packages OCI artifact that scripts/fetch-sapo-engine.sh
+# unpacks, so no engine binary is ever committed. Only the headers and the CMake
+# package config under vendor/sapo are tracked (*.a is already ignored above);
+# these rules keep an accidental `--dest vendor/sapo` from staging binaries.
+/vendor/sapo/bin/
+/vendor/sapo/lib/*.a
+/vendor/sapo/lib/*.so*
+/build/sapo-prefix/
+/.sapo-prefix/
