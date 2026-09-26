@@ -134,7 +134,8 @@ jobs:
             -DCMAKE_CXX_COMPILER=g++-13 \
             -DCMAKE_PREFIX_PATH="$HOME/drogon-install" \
             -DWSSD_SAPO_PREFIX="$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}" \
-            -DWSSD_SAPO_SOURCE=OFF
+            -DWSSD_SAPO_SOURCE=OFF \
+            -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
 
       # Step 7: Build your application
       - name: Build
@@ -149,10 +150,83 @@ jobs:
       - name: List build directory files
         run: ls -l build
 
-      # Step 10: Upload the binary as an artifact
+      # Step 10: Package a self-contained bundle.
+      #
+      # The bare binary is dynamically linked against c-ares, jsoncpp, libpq,
+      # hiredis, brotli ... which a plain server does not have — it dies with
+      # "error while loading shared libraries: libcares.so.2". The bundle ships
+      # those libraries next to the binary and a launcher that points the
+      # loader at them, so the deployment host needs nothing but glibc.
+      # libstdc++/libgcc are already linked statically (see Configure), which
+      # also removes the GCC 13 runtime requirement.
+      - name: Package release bundle
+        run: |
+          set -euo pipefail
+          DIST="$GITHUB_WORKSPACE/dist/wssd-api"
+          mkdir -p "$DIST/bin" "$DIST/lib" "$DIST/config"
+          cp build/WssdApi "$DIST/bin/"
+          for f in config.json config.yaml; do
+            [[ -f "$f" ]] && cp "$f" "$DIST/config/"
+          done
+          [[ -d sapo ]] && cp -r sapo "$DIST/" || true
+
+          # Copy every resolved dependency except the ones glibc itself owns
+          # (copying those breaks the loader on a host with a different glibc).
+          ldd build/WssdApi | awk '/=> \//{print $3}' | sort -u > "$RUNNER_TEMP/deps.txt"
+          while read -r lib; do
+            case "$(basename "$lib")" in
+              libc.so.*|libm.so.*|libpthread.so.*|libdl.so.*|librt.so.*|\
+              ld-linux*|libgcc_s.so.*|libstdc++.so.*|libresolv.so.*) continue ;;
+            esac
+            cp -L "$lib" "$DIST/lib/"
+          done < "$RUNNER_TEMP/deps.txt"
+
+          cat > "$DIST/bin/wssd-api" <<'SH'
+          #!/usr/bin/env bash
+          # Launcher: runs WssdApi against the libraries bundled beside it.
+          set -euo pipefail
+          HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+          export LD_LIBRARY_PATH="${HERE}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+          cd "${WSSD_WORKDIR:-$HERE}"
+          exec "${HERE}/bin/WssdApi" "$@"
+          SH
+          chmod +x "$DIST/bin/wssd-api"
+
+          cat > "$DIST/README-deploy.md" <<'MD'
+          # Deploying WssdApi
+
+          Unpack anywhere (e.g. /var/www/wssd-api) and start `bin/wssd-api`, NOT
+          `bin/WssdApi` directly: the launcher sets LD_LIBRARY_PATH to the
+          bundled `lib/` directory. systemd unit:
+
+              [Service]
+              ExecStart=/var/www/wssd-api/bin/wssd-api
+              WorkingDirectory=/var/www/wssd-api
+
+          If you prefer system packages over the bundle, delete `lib/` and
+          install the runtime libraries instead:
+
+              sudo apt-get install -y libc-ares2 libjsoncpp25 libpq5 \
+                libhiredis0.14 libbrotli1 libssl3 zlib1g uuid-runtime
+
+          Bundled library list: see runtime-deps.txt.
+          MD
+
+          ( cd "$DIST" && ls -1 lib ) > "$DIST/runtime-deps.txt"
+          ldd build/WssdApi > "$DIST/ldd.txt" || true
+          tar -C "$GITHUB_WORKSPACE/dist" -czf "$GITHUB_WORKSPACE/wssd-api-bundle.tar.gz" wssd-api
+          echo "--- bundled libraries ---"; cat "$DIST/runtime-deps.txt"
+
       - name: Upload Binary
         uses: actions/upload-artifact@v4
         with:
           name: wssd-api
           path: build/WssdApi
+          if-no-files-found: error
+
+      - name: Upload deployable bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: wssd-api-bundle
+          path: wssd-api-bundle.tar.gz
           if-no-files-found: error
