@@ -23,7 +23,20 @@ UMask=0027
 
 WorkingDirectory=/var/www/wssd-api
 
-# The CI bundle (artifact "wssd-api-bundle") unpacks to:
+# SINGLE-FILE DEPLOY (artifact "wssd-api-run"): install wssd-api.run to
+#   /usr/local/bin/wssd-api.run, chmod +x, and use
+#     ExecStart=/usr/local/bin/wssd-api.run
+#   It unpacks itself once into $WSSD_RUNTIME_DIR (default /opt/wssd-api/runtime,
+#   content-addressed) and runs in $WSSD_WORKDIR (default /var/lib/wssd-api),
+#   seeding config.json / config.yaml / sapo/ there on first start only.
+#   With that layout use instead:
+#     Environment=WSSD_RUNTIME_DIR=/opt/wssd-api/runtime
+#     Environment=WSSD_WORKDIR=/var/lib/wssd-api
+#     ReadWritePaths=/opt/wssd-api /var/lib/wssd-api
+#     WorkingDirectory=/var/lib/wssd-api
+#
+# UNPACKED BUNDLE (artifact "wssd-api-bundle"), the layout configured below,
+# unpacks to:
 #   /var/www/wssd-api/bin/{wssd-api,WssdApi}   lib/   config/   sapo/
 # Start the LAUNCHER, not bin/WssdApi: it exports LD_LIBRARY_PATH for the
 # bundled c-ares/jsoncpp/libpq/hiredis/brotli shared objects. Running the raw

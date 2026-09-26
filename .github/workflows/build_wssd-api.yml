@@ -150,23 +150,30 @@ jobs:
       - name: List build directory files
         run: ls -l build
 
-      # Step 10: Package a self-contained bundle.
+      # Step 10: Package for deployment.
       #
-      # The bare binary is dynamically linked against c-ares, jsoncpp, libpq,
-      # hiredis, brotli ... which a plain server does not have — it dies with
-      # "error while loading shared libraries: libcares.so.2". The bundle ships
-      # those libraries next to the binary and a launcher that points the
-      # loader at them, so the deployment host needs nothing but glibc.
-      # libstdc++/libgcc are already linked statically (see Configure), which
-      # also removes the GCC 13 runtime requirement.
+      # Two products, one build:
+      #   * dist/wssd-api/          — the unpacked tree (tar.gz artifact)
+      #   * wssd-api.run            — ONE self-contained executable file:
+      #                               shell stub + embedded tar payload.
+      #
+      # A truly static single ELF is not on the table: Drogon's PostgreSQL
+      # backend needs libpq, whose static build pulls in Kerberos/LDAP archives
+      # Ubuntu does not ship. So the single file carries its libraries inside
+      # itself and unpacks them once, on first start, into a content-addressed
+      # runtime directory. libstdc++/libgcc are already static (see Configure).
       - name: Package release bundle
         run: |
           set -euo pipefail
           DIST="$GITHUB_WORKSPACE/dist/wssd-api"
-          mkdir -p "$DIST/bin" "$DIST/lib" "$DIST/config"
+          mkdir -p "$DIST/bin" "$DIST/lib"
           cp build/WssdApi "$DIST/bin/"
+
+          # main.cc does loadConfigFile("config.json") — a path relative to the
+          # WORKING DIRECTORY — so the configs must sit at the bundle root, not
+          # in a config/ subdirectory, or startup fails immediately.
           for f in config.json config.yaml; do
-            [[ -f "$f" ]] && cp "$f" "$DIST/config/"
+            [[ -f "$f" ]] && cp "$f" "$DIST/"
           done
           [[ -d sapo ]] && cp -r sapo "$DIST/" || true
 
@@ -183,7 +190,7 @@ jobs:
 
           cat > "$DIST/bin/wssd-api" <<'SH'
           #!/usr/bin/env bash
-          # Launcher: runs WssdApi against the libraries bundled beside it.
+          # Launcher for the unpacked bundle: runs WssdApi against ../lib.
           set -euo pipefail
           HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
           export LD_LIBRARY_PATH="${HERE}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
@@ -192,30 +199,29 @@ jobs:
           SH
           chmod +x "$DIST/bin/wssd-api"
 
-          cat > "$DIST/README-deploy.md" <<'MD'
-          # Deploying WssdApi
-
-          Unpack anywhere (e.g. /var/www/wssd-api) and start `bin/wssd-api`, NOT
-          `bin/WssdApi` directly: the launcher sets LD_LIBRARY_PATH to the
-          bundled `lib/` directory. systemd unit:
-
-              [Service]
-              ExecStart=/var/www/wssd-api/bin/wssd-api
-              WorkingDirectory=/var/www/wssd-api
-
-          If you prefer system packages over the bundle, delete `lib/` and
-          install the runtime libraries instead:
-
-              sudo apt-get install -y libc-ares2 libjsoncpp25 libpq5 \
-                libhiredis0.14 libbrotli1 libssl3 zlib1g uuid-runtime
-
-          Bundled library list: see runtime-deps.txt.
-          MD
-
           ( cd "$DIST" && ls -1 lib ) > "$DIST/runtime-deps.txt"
           ldd build/WssdApi > "$DIST/ldd.txt" || true
           tar -C "$GITHUB_WORKSPACE/dist" -czf "$GITHUB_WORKSPACE/wssd-api-bundle.tar.gz" wssd-api
           echo "--- bundled libraries ---"; cat "$DIST/runtime-deps.txt"
+
+      # Step 11: fold the whole bundle into ONE executable file.
+      - name: Build single-file executable (wssd-api.run)
+        run: |
+          set -euo pipefail
+          PAYLOAD="$RUNNER_TEMP/payload.tar.gz"
+          tar -C "$GITHUB_WORKSPACE/dist/wssd-api" -czf "$PAYLOAD" .
+          SHA="$(sha256sum "$PAYLOAD" | cut -c1-16)"
+          bash scripts/make-self-extracting.sh \
+            --payload "$PAYLOAD" \
+            --id "$SHA" \
+            --version "${GITHUB_SHA::7}" \
+            --output "$GITHUB_WORKSPACE/wssd-api.run"
+          ls -lh "$GITHUB_WORKSPACE/wssd-api.run"
+          "$GITHUB_WORKSPACE/wssd-api.run" --version
+          # Smoke test: unpack into a scratch dir and confirm the tree is intact.
+          "$GITHUB_WORKSPACE/wssd-api.run" --extract "$RUNNER_TEMP/selftest"
+          test -x "$RUNNER_TEMP/selftest/bin/WssdApi"
+          test -f "$RUNNER_TEMP/selftest/config.json"
 
       - name: Upload Binary
         uses: actions/upload-artifact@v4
@@ -229,4 +235,11 @@ jobs:
         with:
           name: wssd-api-bundle
           path: wssd-api-bundle.tar.gz
+          if-no-files-found: error
+
+      - name: Upload single-file executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: wssd-api-run
+          path: wssd-api.run
           if-no-files-found: error
