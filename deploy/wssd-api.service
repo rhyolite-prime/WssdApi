@@ -5,6 +5,12 @@ Documentation=https://github.com/rhyolite-prime/WssdApi
 # network.target only means "the networking stack has been brought up".
 After=network-online.target postgresql.service redis-server.service
 Wants=network-online.target
+# Stop the 30-restarts-and-counting loop a broken deploy causes: give up after
+# 5 failures in 60s so the unit lands in "failed" and alerts instead of
+# hammering the journal forever. (These two keys belong in [Unit], not
+# [Service] — systemd ignores them there.)
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -33,11 +39,6 @@ ExecStart=/var/www/wssd-api/bin/wssd-api
 
 Restart=always
 RestartSec=5
-# Stop the 30-restarts-and-counting loop a broken deploy causes: give up after
-# 5 failures in 60s so the unit lands in "failed" and alerts instead of
-# hammering the journal forever.
-StartLimitIntervalSec=60
-StartLimitBurst=5
 TimeoutStopSec=20
 KillSignal=SIGINT
 
