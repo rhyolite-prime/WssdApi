@@ -273,10 +273,3 @@ jobs:
           name: wssd-api
           path: build/WssdApi
           if-no-files-found: error
-
-      - name: Upload single-file executable
-        uses: actions/upload-artifact@v4
-        with:
-          name: wssd-api-run
-          path: wssd-api.run
-          if-no-files-found: error
