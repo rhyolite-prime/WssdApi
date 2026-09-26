@@ -31,15 +31,29 @@ jobs:
         with:
           submodules: recursive
 
-      # Step 2: Install dependencies for Drogon, PostgreSQL, and Redis
-      - name: Install dependencies
+      # Step 2: Toolchain + dependencies for Drogon, PostgreSQL and Redis.
+      #
+      # GCC 13 is MANDATORY, not a preference: SapoEngine's release workflow
+      # builds libsapo_core.a with g++-13 and its objects reference libstdc++ 13
+      # internals (e.g. std::string::_M_replace_cold). Linking them with
+      # ubuntu-22.04's default g++-11 fails at the final link with "undefined
+      # reference to ..._M_replace_cold". Drogon is built with the same
+      # compiler for the same reason: one libstdc++ ABI across the whole link.
+      - name: Install toolchain (GCC 13) and dependencies
         run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
           sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-13 g++-13
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100 \
+            --slave /usr/bin/g++ g++ /usr/bin/g++-13
           sudo apt-get install -y --no-install-recommends \
-            g++ git ca-certificates curl gnupg pkg-config make \
+            git ca-certificates curl gnupg pkg-config make \
             libjsoncpp-dev uuid-dev openssl libssl-dev zlib1g-dev \
             libpq-dev postgresql libhiredis-dev \
             libc-ares-dev libbrotli-dev doxygen graphviz dia
+          echo "CC=gcc-13"  >> "$GITHUB_ENV"
+          echo "CXX=g++-13" >> "$GITHUB_ENV"
+          g++-13 --version
 
       # Step 3: CMake >= 3.28 (ubuntu-22.04 ships 3.22, the project requires 3.28)
       - name: Install modern CMake
@@ -58,7 +72,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/drogon-install
-          key: drogon-${{ runner.os }}-ubuntu22.04-v1.9.7
+          key: drogon-${{ runner.os }}-ubuntu22.04-gcc13-v1.9.7
 
       - name: Build Drogon
         if: steps.cache-drogon.outputs.cache-hit != 'true'
@@ -67,6 +81,8 @@ jobs:
             https://github.com/drogonframework/drogon.git "$RUNNER_TEMP/drogon"
           cmake -S "$RUNNER_TEMP/drogon" -B "$RUNNER_TEMP/drogon/build" \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-13 \
+            -DCMAKE_CXX_COMPILER=g++-13 \
             -DCMAKE_INSTALL_PREFIX="$HOME/drogon-install" \
             -DBUILD_POSTGRESQL=ON \
             -DBUILD_EXAMPLES=OFF \
@@ -114,6 +130,8 @@ jobs:
           rm -rf build
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+            -DCMAKE_C_COMPILER=gcc-13 \
+            -DCMAKE_CXX_COMPILER=g++-13 \
             -DCMAKE_PREFIX_PATH="$HOME/drogon-install" \
             -DWSSD_SAPO_PREFIX="$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}" \
             -DWSSD_SAPO_SOURCE=OFF

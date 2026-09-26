@@ -331,9 +331,28 @@ unset(_sapo_candidates)
 unset(_sapo_find_args)
 unset(_sapo_stale)
 
+# The published engine is compiled with SAPO_ENABLE_REDIS=1 but its exported
+# interface only lists Sapo::sapo_vendored and Threads, so hiredis has to be
+# linked by the consumer or the final link dies on redisCommand/redisConnect.
+set(WSSD_SAPO_EXTRA_LIBS "")
+get_target_property(_sapo_defs ${WSSD_SAPO_TARGET} INTERFACE_COMPILE_DEFINITIONS)
+if(_sapo_defs MATCHES "SAPO_ENABLE_REDIS")
+    find_library(WSSD_HIREDIS_LIBRARY NAMES hiredis)
+    if(WSSD_HIREDIS_LIBRARY)
+        list(APPEND WSSD_SAPO_EXTRA_LIBS "${WSSD_HIREDIS_LIBRARY}")
+        message(STATUS "WssdApi: linking hiredis for the Redis-enabled engine "
+                "(${WSSD_HIREDIS_LIBRARY})")
+    else()
+        message(STATUS "WssdApi: engine was built with SAPO_ENABLE_REDIS but no "
+                "hiredis library was found — install libhiredis-dev if the link fails")
+    endif()
+endif()
+unset(_sapo_defs)
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
         Drogon::Drogon
-        ${WSSD_SAPO_TARGET})
+        ${WSSD_SAPO_TARGET}
+        ${WSSD_SAPO_EXTRA_LIBS})
 
 # ##############################################################################
 
