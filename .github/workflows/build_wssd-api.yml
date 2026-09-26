@@ -38,7 +38,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             g++ git ca-certificates curl gnupg pkg-config make \
             libjsoncpp-dev uuid-dev openssl libssl-dev zlib1g-dev \
-            libpq-dev postgresql-server-dev-all libhiredis-dev \
+            libpq-dev postgresql libhiredis-dev \
             libc-ares-dev libbrotli-dev doxygen graphviz dia
 
       # Step 3: CMake >= 3.28 (ubuntu-22.04 ships 3.22, the project requires 3.28)
