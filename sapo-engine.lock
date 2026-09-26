@@ -1,18 +1,18 @@
 # Pinned Sapo Engine version — the single source of truth for both CMake and CI.
 #
-# SapoEngine is a PRIVATE repository, so WssdApi never clones it during a build.
-# The engine publishes its `cmake --install` tree as an OCI artifact to GitHub
-# Packages; this file says which published version this repo consumes.
+# CI clones SapoEngine, builds it and installs it into vendor/sapo. This file
+# records which engine version WssdApi expects to find there.
 #
 #   * CMake reads it to require that exact version from any prebuilt prefix
 #     (find_package(SapoEngine <version> EXACT)), so a stale or hand-built tree
 #     fails loudly instead of silently changing engine behaviour.
-#   * scripts/fetch-sapo-engine.sh reads it to pick the artifact tag.
+#   * the build workflow compares it with the version the engine actually
+#     builds and fails early, with a clear message, when they drift apart.
 #
 # Bumping the engine is therefore a one-line, reviewable change:
-#   1. tag + publish the release in SapoEngine (docs/ci/sapo-engine-publish.yml)
-#   2. update SAPO_ENGINE_VERSION below
-#   3. commit — CI verifies the artifact exists before it builds anything
+#   1. land the engine change on the branch CI builds (SAPO_ENGINE_REF)
+#   2. update SAPO_ENGINE_VERSION below to the version it now reports
+#   3. commit — CI verifies the two agree before it builds anything
 #
 # The value must match the artifact tag exactly (no leading "v"): the engine
 # reports PACKAGE_VERSION 0.4.0 in SapoEngineConfigVersion.cmake.
