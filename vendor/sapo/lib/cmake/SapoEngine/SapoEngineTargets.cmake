@@ -7,7 +7,7 @@ if(CMAKE_VERSION VERSION_LESS "3.0.0")
    message(FATAL_ERROR "CMake >= 3.0.0 required")
 endif()
 cmake_policy(PUSH)
-cmake_policy(VERSION 3.0.0...3.29)
+cmake_policy(VERSION 3.0.0...3.30)
 #----------------------------------------------------------------
 # Generated CMake target import file.
 #----------------------------------------------------------------
@@ -19,7 +19,7 @@ set(CMAKE_IMPORT_FILE_VERSION 1)
 set(_cmake_targets_defined "")
 set(_cmake_targets_not_defined "")
 set(_cmake_expected_targets "")
-foreach(_cmake_expected_target IN ITEMS Sapo::core Sapo::sapoc Sapo::sapo_vendored)
+foreach(_cmake_expected_target IN ITEMS Sapo::sapo_core Sapo::sapoc Sapo::sapo_vendored)
   list(APPEND _cmake_expected_targets "${_cmake_expected_target}")
   if(TARGET "${_cmake_expected_target}")
     list(APPEND _cmake_targets_defined "${_cmake_expected_target}")
@@ -55,10 +55,10 @@ if(_IMPORT_PREFIX STREQUAL "/")
   set(_IMPORT_PREFIX "")
 endif()
 
-# Create imported target Sapo::core
-add_library(Sapo::core STATIC IMPORTED)
+# Create imported target Sapo::sapo_core
+add_library(Sapo::sapo_core STATIC IMPORTED)
 
-set_target_properties(Sapo::core PROPERTIES
+set_target_properties(Sapo::sapo_core PROPERTIES
   INTERFACE_COMPILE_DEFINITIONS "SAPO_ENABLE_REDIS=1"
   INTERFACE_COMPILE_FEATURES "cxx_std_23"
   INTERFACE_INCLUDE_DIRECTORIES "${_IMPORT_PREFIX}/include/sapo"
