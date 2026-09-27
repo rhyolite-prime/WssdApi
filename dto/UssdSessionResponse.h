@@ -13,7 +13,6 @@ namespace wssd_api::dto {
     public:
         std::string USERID;
         std::string MSISDN;
-        std::string SESSIONID;
         std::string USERDATA;
         bool MSGTYPE;
         std::string MSG;
@@ -25,7 +24,6 @@ namespace wssd_api::dto {
             Json::Value json;
             json["USERID"] = USERID;
             json["MSISDN"] = MSISDN;
-            json["SESSIONID"] = SESSIONID;
             json["USERDATA"] = USERDATA;
             json["MSGTYPE"] = MSGTYPE;
             json["MSG"] = MSG;

@@ -137,7 +137,6 @@ Json::Value renderNalo(const dto::NaloUssdSessionRequestDto &dto, const UssdResu
     dto::NaloUssdSessionResponse response;
     response.USERID = dto.getUserId();
     response.MSISDN = dto.getMsisdn();
-    response.SESSIONID = dto.getSession();
     response.USERDATA = dto.getUserData();
     response.MSGTYPE = result.cont;
     response.MSG = result.message;
