@@ -57,7 +57,6 @@ Task<HttpResponsePtr> UssdInteractionController::handleNaloUssdInteraction(HttpR
         wssd_api::dto::NaloUssdSessionResponse fallback;
         fallback.USERID = (*jsonBody).get("USERID", "").asString();
         fallback.MSISDN = (*jsonBody).get("MSISDN", "").asString();
-        fallback.SESSIONID = (*jsonBody).get("SESSIONID", "").asString();
         fallback.USERDATA = (*jsonBody).get("USERDATA", "").asString();
         fallback.MSGTYPE = false;
         fallback.MSG = "Service temporarily unavailable. Please try again later.";
