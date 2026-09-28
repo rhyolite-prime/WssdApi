@@ -30,13 +30,11 @@ Task<HttpResponsePtr> UssdInteractionController::handleNaloUssdInteraction(HttpR
     co_return badRequest("Invalid JSON body");
   }
 
-  LOG_DEBUG << "[ussd][nalo] request: " << jsonBody->toStyledString();
+  LOG_INFO << "[ussd][nalo] request: " << jsonBody->toStyledString();
 
   try {
     wssd_api::dto::NaloUssdSessionRequestDto dto;
     dto.fromJson(*jsonBody);
-
-    LOG_DEBUG << "[ussd][nalo] request: " << jsonBody->toStyledString();
 
     // SESSIONID is deliberately NOT required: Nalo passes no natural
     // session id, so the normalized MSISDN anchors the session (see
