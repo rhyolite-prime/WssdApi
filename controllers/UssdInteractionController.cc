@@ -36,11 +36,9 @@ Task<HttpResponsePtr> UssdInteractionController::handleNaloUssdInteraction(HttpR
     wssd_api::dto::NaloUssdSessionRequestDto dto;
     dto.fromJson(*jsonBody);
 
-    // SESSIONID is deliberately NOT required: Nalo passes no natural
-    // session id, so the normalized MSISDN anchors the session (see
-    // normalizeNalo). Only the service key and subscriber are mandatory.
-    if (dto.getMsisdn().empty() || dto.getUserId().empty()) {
-      co_return badRequest("Missing required fields: USERID, MSISDN");
+    if (dto.getSessionId().empty() || dto.getMsisdn().empty() ||
+        dto.getUserId().empty()) {
+      co_return badRequest("Missing required fields: USERID, MSISDN, SESSIONID");
     }
 
     auto *plugin = drogon::app().getPlugin<SapoEnginePlugin>();
@@ -62,6 +60,7 @@ Task<HttpResponsePtr> UssdInteractionController::handleNaloUssdInteraction(HttpR
     wssd_api::dto::NaloUssdSessionResponse fallback;
     fallback.USERID = (*jsonBody).get("USERID", "").asString();
     fallback.MSISDN = (*jsonBody).get("MSISDN", "").asString();
+    fallback.SESSIONID = (*jsonBody).get("SESSIONID", "").asString();
     fallback.USERDATA = (*jsonBody).get("USERDATA", "").asString();
     fallback.MSGTYPE = false;
     fallback.MSG = "Service temporarily unavailable. Please try again later.";

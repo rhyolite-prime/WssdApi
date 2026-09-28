@@ -1,13 +1,11 @@
 //
 // UssdFlowBindingStore.h — session -> blueprint binding for USSD continuations.
 //
-// Nalo passes no usable session id, so the subscriber's MSISDN *is* the
-// session key — and on continuation turns the dial string is gone (USERDATA
-// carries only the menu reply), so the flow's blueprint can no longer be
-// resolved from the request. The orchestrator therefore pins the resolved
-// blueprint to the session id at initiation time and reads it back on every
-// continuation turn (Hubtel uses the same path for uniformity; its passed
-// SessionId is the key).
+// On continuation turns the dial string is gone (USERDATA carries only the
+// menu reply), so the flow's blueprint can no longer be resolved from the
+// request. The orchestrator therefore pins the resolved blueprint to the
+// provider's session id at initiation time and reads it back on every
+// continuation turn.
 //
 // Primary store is Redis (SET ... EX ttl / GET / DEL against the configured
 // redis_url, so bindings survive restarts and work across nodes); without a

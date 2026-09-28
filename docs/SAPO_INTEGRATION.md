@@ -24,10 +24,10 @@ a published artifact, never cloned — see [Build](#build).
 
 ## Request flow
 
-1. The controller validates the gateway payload (`USERID/MSISDN` for Nalo —
-   `SESSIONID` is optional since the provider passes none — `SessionId/Mobile`
-   for Hubtel; malformed JSON is a 400, exactly as before) and normalizes it
-   into a `UssdInteraction`. The Nalo session key is the normalized MSISDN.
+1. The controller validates the gateway payload (`USERID/MSISDN/SESSIONID` for
+   Nalo, `SessionId/Mobile` for Hubtel; malformed JSON is a 400) and normalizes
+   it into a `UssdInteraction`. Both providers' supplied session ids are used
+   as conversation keys.
 2. The orchestrator resolves the workflow for the dialed service: the
    session's pinned flow binding on continuation turns, else
    `wssd_registry` by `ussd_code` (the row's `executable` column **is** the
@@ -41,7 +41,7 @@ a published artifact, never cloned — see [Build](#build).
    content-hashed so steady-state turns skip re-registration).
 4. Exactly one engine turn runs **off the Drogon IO threads** on the
    `BlockingRunner` pool. The engine session id is deterministic —
-   `nalo:<msisdn>` / `hubtel:<SessionId>` — so gateway retries resume the
+   `nalo:<SESSIONID>` / `hubtel:<SessionId>` — so gateway retries resume the
    same checkpoint instead of forking the conversation. Initiation turns
    (Hubtel `Initiation`, Nalo dial string) force a fresh start; other turns
    resume, and a resume that fails (expired checkpoint) is retried once as
@@ -66,15 +66,14 @@ Request: `{USERID, MSISDN, USERDATA, MSGTYPE, NETWORK, SESSIONID}`.
 Response: `{USERID, MSISDN, SESSIONID, USERDATA, MSGTYPE, MSG}` with
 `MSGTYPE=true` to continue and `false` to end. Request ids are echoed back.
 
-Nalo passes no usable session id and no explicit new/continue flag, so the
-normalized MSISDN **is** the session key (one live flow per subscriber,
-matching the single handset USSD channel; the provider's `SESSIONID`, when
-present, is echoed back and kept in the audit payload but ignored for
-identity). A `USERDATA` dial string (contains `*` and `#`) marks initiation
-and force-starts a fresh flow — redialling mid-flow restarts it; any other
-input continues the session's pinned flow (see below). The dial string
-identifies the service and is not treated as a menu choice (also exposed
-to blueprints as `$dial_code`).
+Nalo's `SESSIONID` is required and is used as the session key. It is echoed
+back in every response. This isolates separate conversations from the same
+subscriber and lets provider retries resume the correct checkpoint. Nalo has
+no explicit new/continue flag, so a `USERDATA` dial string (contains `*` and
+`#`) marks initiation and force-starts a fresh flow; any other input continues
+the session's pinned flow (see below). The dial string identifies the service
+and is not treated as a menu choice (also exposed to blueprints as
+`$dial_code`).
 
 Initiation pins the resolved blueprint to the session id in
 `UssdFlowBindingStore` (Redis `wssd:ussd:binding:<session>` entries with

@@ -31,10 +31,9 @@ struct ExecutionOutcome;
 
 namespace wssd_api::sapo_host::adapters {
 
-/// Nalo -> neutral. Nalo passes no usable session id, so the normalized
-/// MSISDN *is* the session key (one live flow per subscriber), and a
-/// USERDATA dial string marks initiation (see isDialString); everything
-/// else continues the bound flow (see UssdFlowBindingStore).
+/// Nalo -> neutral. SESSIONID is the session key, and a USERDATA dial string
+/// marks initiation (see isDialString); everything else continues the bound
+/// flow (see UssdFlowBindingStore).
 UssdInteraction normalizeNalo(const dto::NaloUssdSessionRequestDto &dto, const Json::Value &raw);
 
 /// Hubtel -> neutral. "Initiation" starts, "Response" continues, "Release"
