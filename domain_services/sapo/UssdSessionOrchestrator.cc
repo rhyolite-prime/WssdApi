@@ -104,8 +104,7 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
     }
 
     std::string blueprintError;
-    const std::string workflowId =
-        engine.ensureBlueprint(resolved->workflowId, resolved->blueprintJson, blueprintError);
+    const std::string workflowId = engine.ensureBlueprint(resolved->workflowId, resolved->blueprintJson, blueprintError);
     if (workflowId.empty()) {
         LOG_ERROR << "[ussd] blueprint failed: " << blueprintError;
         UssdResult result = unavailable("Service temporarily unavailable. Please try again later.");
@@ -141,8 +140,7 @@ drogon::Task<UssdResult> UssdSessionOrchestrator::handle(const UssdInteraction &
     baseInput["sequence"] = interaction.sequence;
     baseInput["client_state"] = interaction.clientState;
     baseInput["input"] = interaction.userInput;  // refined for fresh sessions by the engine call
-    const std::string correlation =
-        toString(interaction.provider) + ":" + interaction.networkSessionId;
+    const std::string correlation = toString(interaction.provider) + ":" + interaction.networkSessionId;
 
     // Blocking engine call (state store + blueprint HTTP): runs on the
     // BlockingRunner pool, never on a Drogon IO thread.

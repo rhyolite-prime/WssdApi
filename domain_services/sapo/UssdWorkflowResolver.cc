@@ -136,6 +136,7 @@ drogon::Task<std::optional<ResolvedWorkflow>> UssdWorkflowResolver::resolve(
     for (const auto &key : expandCandidates(dialCode)) {
         ordered.push_back(key);
     }
+
     for (const auto &key : expandCandidates(serviceKey)) {
         if (std::find(ordered.begin(), ordered.end(), key) == ordered.end()) {
             ordered.push_back(key);

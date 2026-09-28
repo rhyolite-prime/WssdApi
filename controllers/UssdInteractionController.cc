@@ -52,8 +52,7 @@ Task<HttpResponsePtr> UssdInteractionController::handleNaloUssdInteraction(HttpR
         wssd_api::sapo_host::adapters::normalizeNalo(dto, *jsonBody);
     const auto result = co_await plugin->orchestrator().handle(interaction);
 
-    auto resp = HttpResponse::newHttpJsonResponse(
-        wssd_api::sapo_host::adapters::renderNalo(dto, result));
+    auto resp = HttpResponse::newHttpJsonResponse(wssd_api::sapo_host::adapters::renderNalo(dto, result));
     resp->setStatusCode(k200OK);
     co_return resp;
   } catch (const std::exception &e) {
