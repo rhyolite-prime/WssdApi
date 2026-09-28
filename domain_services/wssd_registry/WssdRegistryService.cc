@@ -24,7 +24,7 @@ namespace wssd_api::domain_services {
             if (!query.empty()) {
                 std::string likeQuery = "%" + query + "%";
                 searchCriteria =
-                    Criteria(WssdRegistry::Cols::_wssd_short_name, CompareOperator::Like, likeQuery) ||
+                    Criteria(WssdRegistry::Cols::_alias, CompareOperator::Like, likeQuery) ||
                     Criteria(WssdRegistry::Cols::_ussd_code, CompareOperator::Like, likeQuery) ||
                     Criteria(WssdRegistry::Cols::_business_name, CompareOperator::Like, likeQuery);
             }
@@ -95,7 +95,7 @@ namespace wssd_api::domain_services {
 
             drogon_model::WssdApi::WssdRegistry model;
             
-            if(!dto.getWssdShortName().empty()) model.setWssdShortName(dto.getWssdShortName());
+            if(!dto.getAlias().empty()) model.setAlias(dto.getAlias());
             if(!dto.getUssdCode().empty()) model.setUssdCode(dto.getUssdCode());
             if(!dto.getDisplayTitle().empty()) model.setDisplayTitle(dto.getDisplayTitle());
             if(!dto.getDescription().empty()) model.setDescription(dto.getDescription());
@@ -130,7 +130,7 @@ namespace wssd_api::domain_services {
 
             auto existingModel = co_await mapper.findByPrimaryKey(id);
             
-            if(!dto.getWssdShortName().empty()) existingModel.setWssdShortName(dto.getWssdShortName());
+            if(!dto.getAlias().empty()) existingModel.setAlias(dto.getAlias());
             if(!dto.getUssdCode().empty()) existingModel.setUssdCode(dto.getUssdCode());
             if(!dto.getDisplayTitle().empty()) existingModel.setDisplayTitle(dto.getDisplayTitle());
             if(!dto.getDescription().empty()) existingModel.setDescription(dto.getDescription());

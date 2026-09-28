@@ -145,7 +145,7 @@ drogon::Task<std::optional<ResolvedWorkflow>> UssdWorkflowResolver::resolve(
 
     std::optional<ResolvedWorkflow> found;
     for (const auto &key : ordered) {
-        if (auto hit = co_await lookupDatabase(dialCode)) {
+        if (auto hit = co_await lookupDatabase(key)) {
             found = std::move(hit);
             break;
         }
@@ -190,30 +190,27 @@ drogon::Task<std::optional<ResolvedWorkflow>> UssdWorkflowResolver::lookupDataba
     try {
         auto db = drogon::app().getDbClient();
         drogon::orm::CoroMapper<WssdRegistry> mapper(db);
-        const std::string columns[] = {WssdRegistry::Cols::_ussd_code};
-        for (const auto &column : columns) {
-            auto rows = co_await mapper.limit(1).findBy(
-                drogon::orm::Criteria(column, drogon::orm::CompareOperator::EQ, key));
-            if (rows.empty()) {
-                continue;
-            }
-            const auto &row = rows.front();
-            const auto executable = row.getExecutable();
-            if (!executable || executable->empty()) {
-                LOG_WARN << "[ussd] registry entry for '" << key << "' has no executable blueprint";
-                continue;
-            }
-            ResolvedWorkflow resolved;
-            resolved.workflowId = sanitizeWorkflowId(key);
-            resolved.blueprintJson = *executable;
-            resolved.displayTitle = row.getValueOfDisplayTitle();
-            if (resolved.displayTitle.empty()) {
-                resolved.displayTitle = row.getValueOfBusinessName();
-            }
-            resolved.matchedKey = key;
-            resolved.fromDatabase = true;
-            co_return std::optional<ResolvedWorkflow>{std::move(resolved)};
+
+        auto rows = co_await mapper.limit(1).findBy(drogon::orm::Criteria(WssdRegistry::Cols::_alias, drogon::orm::CompareOperator::EQ, key) || drogon::orm::Criteria(WssdRegistry::Cols::_ussd_code, drogon::orm::CompareOperator::EQ, key));
+        if (rows.empty()) {
+
         }
+        const auto &row = rows.front();
+        const auto executable = row.getExecutable();
+        if (!executable || executable->empty()) {
+            LOG_WARN << "[ussd] registry entry for '" << key << "' has no executable blueprint";
+
+        }
+        ResolvedWorkflow resolved;
+        resolved.workflowId = sanitizeWorkflowId(key);
+        resolved.blueprintJson = *executable;
+        resolved.displayTitle = row.getValueOfDisplayTitle();
+        if (resolved.displayTitle.empty()) {
+            resolved.displayTitle = row.getValueOfBusinessName();
+        }
+        resolved.matchedKey = key;
+        resolved.fromDatabase = true;
+        co_return std::optional<ResolvedWorkflow>{std::move(resolved)};
     } catch (const std::exception &e) {
         LOG_WARN << "[ussd] registry lookup failed for '" << key << "': " << e.what();
     }

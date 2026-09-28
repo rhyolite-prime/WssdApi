@@ -46,8 +46,7 @@ Task<HttpResponsePtr> UssdInteractionController::handleNaloUssdInteraction(HttpR
       throw std::runtime_error(
           "SapoEnginePlugin is not registered (see config.json)");
     }
-    const auto interaction =
-        wssd_api::sapo_host::adapters::normalizeNalo(dto, *jsonBody);
+    const auto interaction = wssd_api::sapo_host::adapters::normalizeNalo(dto, *jsonBody);
     const auto result = co_await plugin->orchestrator().handle(interaction);
 
     auto resp = HttpResponse::newHttpJsonResponse(wssd_api::sapo_host::adapters::renderNalo(dto, result));

@@ -45,7 +45,7 @@ class WssdRegistry
     struct Cols
     {
         static const std::string _id;
-        static const std::string _wssd_short_name;
+        static const std::string _alias;
         static const std::string _ussd_code;
         static const std::string _display_title;
         static const std::string _description;
@@ -120,15 +120,15 @@ class WssdRegistry
     void setId(const std::string &pId) noexcept;
     void setId(std::string &&pId) noexcept;
 
-    /**  For column wssd_short_name  */
-    ///Get the value of the column wssd_short_name, returns the default value if the column is null
-    const std::string &getValueOfWssdShortName() const noexcept;
+    /**  For column alias  */
+    ///Get the value of the column alias, returns the default value if the column is null
+    const std::string &getValueOfAlias() const noexcept;
     ///Return a shared_ptr object pointing to the column const value, or an empty shared_ptr object if the column is null
-    const std::shared_ptr<std::string> &getWssdShortName() const noexcept;
-    ///Set the value of the column wssd_short_name
-    void setWssdShortName(const std::string &pWssdShortName) noexcept;
-    void setWssdShortName(std::string &&pWssdShortName) noexcept;
-    void setWssdShortNameToNull() noexcept;
+    const std::shared_ptr<std::string> &getAlias() const noexcept;
+    ///Set the value of the column alias
+    void setAlias(const std::string &pAlias) noexcept;
+    void setAlias(std::string &&pAlias) noexcept;
+    void setAliasToNull() noexcept;
 
     /**  For column ussd_code  */
     ///Get the value of the column ussd_code, returns the default value if the column is null
@@ -285,7 +285,7 @@ class WssdRegistry
     ///For mysql or sqlite3
     void updateId(const uint64_t id);
     std::shared_ptr<std::string> id_;
-    std::shared_ptr<std::string> wssdShortName_;
+    std::shared_ptr<std::string> alias_;
     std::shared_ptr<std::string> ussdCode_;
     std::shared_ptr<std::string> displayTitle_;
     std::shared_ptr<std::string> description_;
@@ -337,7 +337,7 @@ class WssdRegistry
         }
         if(dirtyFlag_[1])
         {
-            sql += "wssd_short_name,";
+            sql += "alias,";
             ++parametersCount;
         }
         if(dirtyFlag_[2])
