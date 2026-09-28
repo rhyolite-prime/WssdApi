@@ -14,7 +14,7 @@ using namespace drogon::orm;
 using namespace drogon_model::WssdApi;
 
 const std::string WssdRegistry::Cols::_id = "\"id\"";
-const std::string WssdRegistry::Cols::_wssd_short_name = "\"wssd_short_name\"";
+const std::string WssdRegistry::Cols::_alias = "\"alias\"";
 const std::string WssdRegistry::Cols::_ussd_code = "\"ussd_code\"";
 const std::string WssdRegistry::Cols::_display_title = "\"display_title\"";
 const std::string WssdRegistry::Cols::_description = "\"description\"";
@@ -35,7 +35,7 @@ const std::string WssdRegistry::tableName = "\"wssd_registry\"";
 
 const std::vector<typename WssdRegistry::MetaData> WssdRegistry::metaData_={
 {"id","std::string","uuid",0,0,1,1},
-{"wssd_short_name","std::string","character varying",100,0,0,0},
+{"alias","std::string","character varying",100,0,0,0},
 {"ussd_code","std::string","character varying",25,0,0,0},
 {"display_title","std::string","character varying",100,0,0,0},
 {"description","std::string","character varying",250,0,0,0},
@@ -64,9 +64,9 @@ WssdRegistry::WssdRegistry(const Row &r, const ssize_t indexOffset) noexcept
         {
             id_=std::make_shared<std::string>(r["id"].as<std::string>());
         }
-        if(!r["wssd_short_name"].isNull())
+        if(!r["alias"].isNull())
         {
-            wssdShortName_=std::make_shared<std::string>(r["wssd_short_name"].as<std::string>());
+            alias_=std::make_shared<std::string>(r["alias"].as<std::string>());
         }
         if(!r["ussd_code"].isNull())
         {
@@ -196,7 +196,7 @@ WssdRegistry::WssdRegistry(const Row &r, const ssize_t indexOffset) noexcept
         index = offset + 1;
         if(!r[index].isNull())
         {
-            wssdShortName_=std::make_shared<std::string>(r[index].as<std::string>());
+            alias_=std::make_shared<std::string>(r[index].as<std::string>());
         }
         index = offset + 2;
         if(!r[index].isNull())
@@ -346,7 +346,7 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson, const std::vector<std::stri
         dirtyFlag_[1] = true;
         if(!pJson[pMasqueradingVector[1]].isNull())
         {
-            wssdShortName_=std::make_shared<std::string>(pJson[pMasqueradingVector[1]].asString());
+            alias_=std::make_shared<std::string>(pJson[pMasqueradingVector[1]].asString());
         }
     }
     if(!pMasqueradingVector[2].empty() && pJson.isMember(pMasqueradingVector[2]))
@@ -527,12 +527,12 @@ WssdRegistry::WssdRegistry(const Json::Value &pJson) noexcept(false)
             id_=std::make_shared<std::string>(pJson["id"].asString());
         }
     }
-    if(pJson.isMember("wssd_short_name"))
+    if(pJson.isMember("alias"))
     {
         dirtyFlag_[1]=true;
-        if(!pJson["wssd_short_name"].isNull())
+        if(!pJson["alias"].isNull())
         {
-            wssdShortName_=std::make_shared<std::string>(pJson["wssd_short_name"].asString());
+            alias_=std::make_shared<std::string>(pJson["alias"].asString());
         }
     }
     if(pJson.isMember("ussd_code"))
@@ -723,7 +723,7 @@ void WssdRegistry::updateByMasqueradedJson(const Json::Value &pJson,
         dirtyFlag_[1] = true;
         if(!pJson[pMasqueradingVector[1]].isNull())
         {
-            wssdShortName_=std::make_shared<std::string>(pJson[pMasqueradingVector[1]].asString());
+            alias_=std::make_shared<std::string>(pJson[pMasqueradingVector[1]].asString());
         }
     }
     if(!pMasqueradingVector[2].empty() && pJson.isMember(pMasqueradingVector[2]))
@@ -903,12 +903,12 @@ void WssdRegistry::updateByJson(const Json::Value &pJson) noexcept(false)
             id_=std::make_shared<std::string>(pJson["id"].asString());
         }
     }
-    if(pJson.isMember("wssd_short_name"))
+    if(pJson.isMember("alias"))
     {
         dirtyFlag_[1] = true;
-        if(!pJson["wssd_short_name"].isNull())
+        if(!pJson["alias"].isNull())
         {
-            wssdShortName_=std::make_shared<std::string>(pJson["wssd_short_name"].asString());
+            alias_=std::make_shared<std::string>(pJson["alias"].asString());
         }
     }
     if(pJson.isMember("ussd_code"))
@@ -1106,30 +1106,30 @@ const typename WssdRegistry::PrimaryKeyType & WssdRegistry::getPrimaryKey() cons
     return *id_;
 }
 
-const std::string &WssdRegistry::getValueOfWssdShortName() const noexcept
+const std::string &WssdRegistry::getValueOfAlias() const noexcept
 {
     static const std::string defaultValue = std::string();
-    if(wssdShortName_)
-        return *wssdShortName_;
+    if(alias_)
+        return *alias_;
     return defaultValue;
 }
-const std::shared_ptr<std::string> &WssdRegistry::getWssdShortName() const noexcept
+const std::shared_ptr<std::string> &WssdRegistry::getAlias() const noexcept
 {
-    return wssdShortName_;
+    return alias_;
 }
-void WssdRegistry::setWssdShortName(const std::string &pWssdShortName) noexcept
+void WssdRegistry::setAlias(const std::string &pAlias) noexcept
 {
-    wssdShortName_ = std::make_shared<std::string>(pWssdShortName);
+    alias_ = std::make_shared<std::string>(pAlias);
     dirtyFlag_[1] = true;
 }
-void WssdRegistry::setWssdShortName(std::string &&pWssdShortName) noexcept
+void WssdRegistry::setAlias(std::string &&pAlias) noexcept
 {
-    wssdShortName_ = std::make_shared<std::string>(std::move(pWssdShortName));
+    alias_ = std::make_shared<std::string>(std::move(pAlias));
     dirtyFlag_[1] = true;
 }
-void WssdRegistry::setWssdShortNameToNull() noexcept
+void WssdRegistry::setAliasToNull() noexcept
 {
-    wssdShortName_.reset();
+    alias_.reset();
     dirtyFlag_[1] = true;
 }
 
@@ -1474,7 +1474,7 @@ const std::vector<std::string> &WssdRegistry::insertColumns() noexcept
 {
     static const std::vector<std::string> inCols={
         "id",
-        "wssd_short_name",
+        "alias",
         "ussd_code",
         "display_title",
         "description",
@@ -1508,9 +1508,9 @@ void WssdRegistry::outputArgs(drogon::orm::internal::SqlBinder &binder) const
     }
     if(dirtyFlag_[1])
     {
-        if(getWssdShortName())
+        if(getAlias())
         {
-            binder << getValueOfWssdShortName();
+            binder << getValueOfAlias();
         }
         else
         {
@@ -1758,9 +1758,9 @@ void WssdRegistry::updateArgs(drogon::orm::internal::SqlBinder &binder) const
     }
     if(dirtyFlag_[1])
     {
-        if(getWssdShortName())
+        if(getAlias())
         {
-            binder << getValueOfWssdShortName();
+            binder << getValueOfAlias();
         }
         else
         {
@@ -1933,13 +1933,13 @@ Json::Value WssdRegistry::toJson() const
     {
         ret["id"]=Json::Value();
     }
-    if(getWssdShortName())
+    if(getAlias())
     {
-        ret["wssd_short_name"]=getValueOfWssdShortName();
+        ret["alias"]=getValueOfAlias();
     }
     else
     {
-        ret["wssd_short_name"]=Json::Value();
+        ret["alias"]=Json::Value();
     }
     if(getUssdCode())
     {
@@ -2080,9 +2080,9 @@ Json::Value WssdRegistry::toMasqueradedJson(
         }
         if(!pMasqueradingVector[1].empty())
         {
-            if(getWssdShortName())
+            if(getAlias())
             {
-                ret[pMasqueradingVector[1]]=getValueOfWssdShortName();
+                ret[pMasqueradingVector[1]]=getValueOfAlias();
             }
             else
             {
@@ -2254,13 +2254,13 @@ Json::Value WssdRegistry::toMasqueradedJson(
     {
         ret["id"]=Json::Value();
     }
-    if(getWssdShortName())
+    if(getAlias())
     {
-        ret["wssd_short_name"]=getValueOfWssdShortName();
+        ret["alias"]=getValueOfAlias();
     }
     else
     {
-        ret["wssd_short_name"]=Json::Value();
+        ret["alias"]=Json::Value();
     }
     if(getUssdCode())
     {
@@ -2384,9 +2384,9 @@ bool WssdRegistry::validateJsonForCreation(const Json::Value &pJson, std::string
         if(!validJsonOfField(0, "id", pJson["id"], err, true))
             return false;
     }
-    if(pJson.isMember("wssd_short_name"))
+    if(pJson.isMember("alias"))
     {
-        if(!validJsonOfField(1, "wssd_short_name", pJson["wssd_short_name"], err, true))
+        if(!validJsonOfField(1, "alias", pJson["alias"], err, true))
             return false;
     }
     if(pJson.isMember("ussd_code"))
@@ -2629,9 +2629,9 @@ bool WssdRegistry::validateJsonForUpdate(const Json::Value &pJson, std::string &
         err = "The value of primary key must be set in the json object for update";
         return false;
     }
-    if(pJson.isMember("wssd_short_name"))
+    if(pJson.isMember("alias"))
     {
-        if(!validJsonOfField(1, "wssd_short_name", pJson["wssd_short_name"], err, false))
+        if(!validJsonOfField(1, "alias", pJson["alias"], err, false))
             return false;
     }
     if(pJson.isMember("ussd_code"))

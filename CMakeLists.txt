@@ -90,7 +90,7 @@ find_package(Drogon CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 
 # ##############################################################################
-# Sapo Engine (USSD workflow runtime) — the upstream repository is PRIVATE.
+# Sapo Engine (USSD workflow runtime) — https://github.com/rhyolite-prime/SapoEngine
 #
 # No build path here may assume an anonymous clone works. Resolution order:
 #
@@ -98,13 +98,13 @@ find_package(Threads REQUIRED)
 #      from the first of these that holds a COMPLETE tree:
 #        -DWSSD_SAPO_PREFIX=<dir> / $ENV{SAPO_PREFIX}  <- what CI passes
 #        <repo>/vendor/sapo                            <- opt-in vendoring
-#      scripts/fetch-sapo-engine.sh materialises such a prefix from the OCI
-#      artifact the engine publishes to GitHub Packages, authenticated with the
-#      workflow's own GITHUB_TOKEN — no PAT, no deploy key, no git clone.
+#      CI produces that prefix the same way you do locally:
+#        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSAPO_ENABLE_CPR=OFF \
+#              -DSAPO_ENABLE_REDIS=ON -DSAPO_BUILD_TESTS=OFF
+#        cmake --build build -j$(nproc)
+#        cmake --install build --prefix <WssdApi>/vendor/sapo
 #   2. Otherwise, when WSSD_SAPO_SOURCE is ON or AUTO, build from source with
-#      FetchContent. This needs git credentials for the private repo; the
-#      pre-flight below fails with instructions instead of letting FetchContent
-#      die on an opaque 403 or hang on a credential prompt.
+#      FetchContent (the repository is public, so this needs no credentials).
 #
 # WSSD_SAPO_SOURCE=OFF makes the prebuilt tree mandatory — CI uses that so it
 # can never silently fall back to building an unpinned engine from source.
@@ -179,22 +179,51 @@ foreach(_sapo_cand IN LISTS _sapo_candidates)
     unset(SapoEngine_DIR)
     unset(SapoEngine_DIR CACHE)
     find_package(SapoEngine ${_sapo_find_args} PATHS "${_sapo_cand}" NO_DEFAULT_PATH)
-    if(SapoEngine_FOUND AND TARGET Sapo::sapo_core)
-        set(WSSD_SAPO_TARGET Sapo::sapo_core)
+    # The installed package exports the engine as Sapo::core (SapoEngineTargets
+    # .cmake); older/in-tree builds called it Sapo::sapo_core or sapo_core.
+    # Accept all of them — checking only one name made a perfectly good prefix
+    # look like a version mismatch.
+    set(_sapo_found_target "")
+    foreach(_sapo_name IN ITEMS Sapo::core Sapo::sapo_core sapo_core)
+        if(TARGET ${_sapo_name})
+            set(_sapo_found_target ${_sapo_name})
+            break()
+        endif()
+    endforeach()
+    unset(_sapo_name)
+    if(SapoEngine_FOUND AND _sapo_found_target)
+        set(WSSD_SAPO_TARGET ${_sapo_found_target})
         message(STATUS "WssdApi: using prebuilt SapoEngine "
-                "${WSSD_SAPO_VERSION} from ${_sapo_cand}")
+                "${WSSD_SAPO_VERSION} from ${_sapo_cand} (target ${WSSD_SAPO_TARGET})")
+    elseif(SapoEngine_FOUND)
+        set(_sapo_stale "${_sapo_cand}")
+        message(STATUS "WssdApi: SapoEngine prefix ${_sapo_cand} was found but exports "
+                "no known engine target (expected one of Sapo::core, Sapo::sapo_core, sapo_core)")
     else()
         # Config present but rejected: almost always a version mismatch against
         # the lock file, which is exactly what EXACT is here to catch.
         set(_sapo_stale "${_sapo_cand}")
-        message(STATUS "WssdApi: SapoEngine prefix ${_sapo_cand} does not provide "
-                "version ${WSSD_SAPO_VERSION} (see sapo-engine.lock)")
+        set(_sapo_cand_version "unknown")
+        if(EXISTS "${_sapo_cand}/lib/cmake/SapoEngine/SapoEngineConfigVersion.cmake")
+            file(STRINGS "${_sapo_cand}/lib/cmake/SapoEngine/SapoEngineConfigVersion.cmake"
+                    _sapo_cand_version_line REGEX "^set\\(PACKAGE_VERSION ")
+            if(_sapo_cand_version_line)
+                list(GET _sapo_cand_version_line 0 _sapo_cand_version)
+                string(REGEX REPLACE "^set\\(PACKAGE_VERSION[ \t]*\"([^\"]*)\".*$" "\\1"
+                        _sapo_cand_version "${_sapo_cand_version}")
+            endif()
+            unset(_sapo_cand_version_line)
+        endif()
+        message(STATUS "WssdApi: SapoEngine prefix ${_sapo_cand} provides version "
+                "${_sapo_cand_version}, not the pinned ${WSSD_SAPO_VERSION} (see sapo-engine.lock)")
+        unset(_sapo_cand_version)
     endif()
+    unset(_sapo_found_target)
 endforeach()
 unset(_sapo_cand)
 
 if(WSSD_SAPO_TARGET)
-    get_target_property(_sapo_incs Sapo::sapo_core INTERFACE_INCLUDE_DIRECTORIES)
+    get_target_property(_sapo_incs ${WSSD_SAPO_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
     if(_sapo_incs)
         list(APPEND WSSD_SAPO_INCLUDE_DIRS ${_sapo_incs})
     endif()
@@ -207,20 +236,18 @@ if(WSSD_SAPO_TARGET)
     endif()
     unset(_sapo_incs)
 elseif(NOT WSSD_SAPO_SOURCE STREQUAL "OFF")
-    # ---- 2. build from source (private repo: needs credentials) --------------
+    # ---- 2. build from source (public repo: no credentials needed) -----------
     message(STATUS "WssdApi: no prebuilt SapoEngine ${WSSD_SAPO_VERSION}; "
             "building from source (${WSSD_SAPO_REPO} @ ${WSSD_SAPO_GIT_TAG})")
     find_package(Git QUIET)
     if(NOT GIT_FOUND)
         message(FATAL_ERROR "WSSD_SAPO_SOURCE=${WSSD_SAPO_SOURCE} needs git to clone "
-                "SapoEngine, but git was not found. Install git, or fetch a prebuilt "
-                "engine with scripts/fetch-sapo-engine.sh and pass "
-                "-DWSSD_SAPO_PREFIX=<dir>.")
+                "SapoEngine, but git was not found. Install git, or install a "
+                "pre-built engine tree and pass -DWSSD_SAPO_PREFIX=<dir>.")
     endif()
-    # Reachability/auth pre-flight. Without it a private-repo clone surfaces as a
-    # cryptic FetchContent failure — or worse, blocks on an interactive
-    # username prompt. GIT_TERMINAL_PROMPT=0 makes that an immediate error; the
-    # variable stays set so the clone FetchContent spawns inherits it too.
+    # Reachability pre-flight: turn an unreachable remote into one clear message
+    # instead of a cryptic FetchContent failure. GIT_TERMINAL_PROMPT=0 also stops
+    # a misconfigured URL from blocking on an interactive credential prompt.
     set(ENV{GIT_TERMINAL_PROMPT} "0")
     execute_process(
             COMMAND "${GIT_EXECUTABLE}" ls-remote --heads "${WSSD_SAPO_REPO}"
@@ -229,19 +256,10 @@ elseif(NOT WSSD_SAPO_SOURCE STREQUAL "OFF")
             TIMEOUT 60)
     if(NOT _sapo_probe EQUAL 0)
         message(FATAL_ERROR
-                "Cannot reach ${WSSD_SAPO_REPO} — the repository is private (or the URL is "
-                "wrong) and this process holds no credentials for it.\n"
-                "Pick one:\n"
-                "  a) Use the published prebuilt engine (recommended, no credentials):\n"
-                "       ./scripts/fetch-sapo-engine.sh --dest build/sapo-prefix\n"
-                "       cmake -S . -B build -DWSSD_SAPO_PREFIX=build/sapo-prefix\n"
-                "  b) Grant git read access to the private repo, then re-configure:\n"
-                "       git config --global url.\"https://x-access-token:<TOKEN>"
-                "@github.com/rhyolite-prime/\".insteadOf \"https://github.com/rhyolite-prime/\"\n"
-                "  c) Point at an engine you already built yourself:\n"
-                "       cmake -S . -B build -DWSSD_SAPO_PREFIX=/path/to/sapo/install\n"
-                "  d) Forbid source builds entirely (CI does this) with "
-                "-DWSSD_SAPO_SOURCE=OFF.")
+                "Cannot reach ${WSSD_SAPO_REPO} (network problem, or the URL is wrong).\n"
+                "Build the engine yourself and point CMake at the install tree:\n"
+                "  cmake --install <engine-build> --prefix $PWD/vendor/sapo\n"
+                "  cmake -S . -B build -DWSSD_SAPO_PREFIX=$PWD/vendor/sapo")
     endif()
     unset(_sapo_probe)
     include(FetchContent)
@@ -253,7 +271,9 @@ elseif(NOT WSSD_SAPO_SOURCE STREQUAL "OFF")
             GIT_TAG "${WSSD_SAPO_GIT_TAG}"
             GIT_SHALLOW TRUE)
     FetchContent_MakeAvailable(sapo_engine)
-    if(TARGET Sapo::sapo_core)
+    if(TARGET Sapo::core)
+        set(WSSD_SAPO_TARGET Sapo::core)
+    elseif(TARGET Sapo::sapo_core)
         set(WSSD_SAPO_TARGET Sapo::sapo_core)
     elseif(TARGET sapo_core)
         set(WSSD_SAPO_TARGET sapo_core)
@@ -279,13 +299,15 @@ if(NOT WSSD_SAPO_TARGET)
     message(FATAL_ERROR
             "No usable SapoEngine ${WSSD_SAPO_VERSION} was found and "
             "WSSD_SAPO_SOURCE=${WSSD_SAPO_SOURCE} forbids building it from source.\n"
-            "Fetch the published artifact and pass its prefix:\n"
-            "  ./scripts/fetch-sapo-engine.sh --dest build/sapo-prefix\n"
-            "  cmake -S . -B build -DWSSD_SAPO_PREFIX=$PWD/build/sapo-prefix\n"
+            "Build the engine and install it into vendor/sapo:\n"
+            "  git clone https://github.com/rhyolite-prime/SapoEngine.git\n"
+            "  cmake -S SapoEngine -B SapoEngine/build -DCMAKE_BUILD_TYPE=Release "
+            "-DSAPO_ENABLE_CPR=OFF -DSAPO_ENABLE_REDIS=ON -DSAPO_BUILD_TESTS=OFF\n"
+            "  cmake --build SapoEngine/build -j\n"
+            "  cmake --install SapoEngine/build --prefix $PWD/vendor/sapo\n"
             "Prefixes examined: ${_sapo_candidates}\n"
             "A prefix needs lib/libsapo_core.a, lib/cmake/SapoEngine/ and bin/sapoc.\n"
-            "Allow a source build instead with -DWSSD_SAPO_SOURCE=AUTO "
-            "(requires git credentials for the private repo).")
+            "Allow a source build instead with -DWSSD_SAPO_SOURCE=AUTO.")
 endif()
 
 # Header search path for targets that use engine headers WITHOUT linking the
@@ -300,9 +322,28 @@ unset(_sapo_candidates)
 unset(_sapo_find_args)
 unset(_sapo_stale)
 
+# The published engine is compiled with SAPO_ENABLE_REDIS=1 but its exported
+# interface only lists Sapo::sapo_vendored and Threads, so hiredis has to be
+# linked by the consumer or the final link dies on redisCommand/redisConnect.
+set(WSSD_SAPO_EXTRA_LIBS "")
+get_target_property(_sapo_defs ${WSSD_SAPO_TARGET} INTERFACE_COMPILE_DEFINITIONS)
+if(_sapo_defs MATCHES "SAPO_ENABLE_REDIS")
+    find_library(WSSD_HIREDIS_LIBRARY NAMES hiredis)
+    if(WSSD_HIREDIS_LIBRARY)
+        list(APPEND WSSD_SAPO_EXTRA_LIBS "${WSSD_HIREDIS_LIBRARY}")
+        message(STATUS "WssdApi: linking hiredis for the Redis-enabled engine "
+                "(${WSSD_HIREDIS_LIBRARY})")
+    else()
+        message(STATUS "WssdApi: engine was built with SAPO_ENABLE_REDIS but no "
+                "hiredis library was found — install libhiredis-dev if the link fails")
+    endif()
+endif()
+unset(_sapo_defs)
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
         Drogon::Drogon
-        ${WSSD_SAPO_TARGET})
+        ${WSSD_SAPO_TARGET}
+        ${WSSD_SAPO_EXTRA_LIBS})
 
 # ##############################################################################
 

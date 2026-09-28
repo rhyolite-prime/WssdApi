@@ -3,7 +3,7 @@
 WssdApi embeds the [Sapo Engine](https://github.com/rhyolite-prime/SapoEngine)
 as its USSD workflow runtime. One process-wide `VirtualMachine` serves every
 USSD turn; gateways keep their own wire models and the engine only ever sees
-provider-neutral JSON. The engine repository is **private** and is consumed as
+provider-neutral JSON. The engine repository is public and is consumed as
 a published artifact, never cloned — see [Build](#build).
 
 ```
@@ -24,10 +24,10 @@ a published artifact, never cloned — see [Build](#build).
 
 ## Request flow
 
-1. The controller validates the gateway payload (`USERID/MSISDN` for Nalo —
-   `SESSIONID` is optional since the provider passes none — `SessionId/Mobile`
-   for Hubtel; malformed JSON is a 400, exactly as before) and normalizes it
-   into a `UssdInteraction`. The Nalo session key is the normalized MSISDN.
+1. The controller validates the gateway payload (`USERID/MSISDN/SESSIONID` for
+   Nalo, `SessionId/Mobile` for Hubtel; malformed JSON is a 400) and normalizes
+   it into a `UssdInteraction`. Both providers' supplied session ids are used
+   as conversation keys.
 2. The orchestrator resolves the workflow for the dialed service: the
    session's pinned flow binding on continuation turns, else
    `wssd_registry` by `ussd_code` (the row's `executable` column **is** the
@@ -41,7 +41,7 @@ a published artifact, never cloned — see [Build](#build).
    content-hashed so steady-state turns skip re-registration).
 4. Exactly one engine turn runs **off the Drogon IO threads** on the
    `BlockingRunner` pool. The engine session id is deterministic —
-   `nalo:<msisdn>` / `hubtel:<SessionId>` — so gateway retries resume the
+   `nalo:<SESSIONID>` / `hubtel:<SessionId>` — so gateway retries resume the
    same checkpoint instead of forking the conversation. Initiation turns
    (Hubtel `Initiation`, Nalo dial string) force a fresh start; other turns
    resume, and a resume that fails (expired checkpoint) is retried once as
@@ -66,15 +66,14 @@ Request: `{USERID, MSISDN, USERDATA, MSGTYPE, NETWORK, SESSIONID}`.
 Response: `{USERID, MSISDN, SESSIONID, USERDATA, MSGTYPE, MSG}` with
 `MSGTYPE=true` to continue and `false` to end. Request ids are echoed back.
 
-Nalo passes no usable session id and no explicit new/continue flag, so the
-normalized MSISDN **is** the session key (one live flow per subscriber,
-matching the single handset USSD channel; the provider's `SESSIONID`, when
-present, is echoed back and kept in the audit payload but ignored for
-identity). A `USERDATA` dial string (contains `*` and `#`) marks initiation
-and force-starts a fresh flow — redialling mid-flow restarts it; any other
-input continues the session's pinned flow (see below). The dial string
-identifies the service and is not treated as a menu choice (also exposed
-to blueprints as `$dial_code`).
+Nalo's `SESSIONID` is required and is used as the session key. It is echoed
+back in every response. This isolates separate conversations from the same
+subscriber and lets provider retries resume the correct checkpoint. Nalo has
+no explicit new/continue flag, so a `USERDATA` dial string (contains `*` and
+`#`) marks initiation and force-starts a fresh flow; any other input continues
+the session's pinned flow (see below). The dial string identifies the service
+and is not treated as a menu choice (also exposed to blueprints as
+`$dial_code`).
 
 Initiation pins the resolved blueprint to the session id in
 `UssdFlowBindingStore` (Redis `wssd:ussd:binding:<session>` entries with
@@ -188,51 +187,50 @@ fallback). Keep Redis configuration in exactly one place: `redis_url` /
 
 ## Build
 
-**The engine lives in a private repository**, so no build path may assume an
-anonymous clone works. The pinned version is declared once, in
-`sapo-engine.lock`:
+The engine is built from source and installed into `vendor/sapo`. The expected
+version is declared once, in `sapo-engine.lock`:
 
 ```
 SAPO_ENGINE_VERSION=0.4.0
 ```
 
 CMake enforces that exact version (`find_package(SapoEngine <v> EXACT)`), so a
-stale or hand-built engine fails at configure time instead of quietly changing
-behaviour.
+stale or mismatched engine fails at configure time instead of quietly changing
+behaviour. CI compares the version the engine actually builds against this file
+and stops with an explicit message if they drift.
 
 ### Getting the engine
 
-The engine's release workflow publishes its `cmake --install` prefix as an OCI
-artifact to GitHub Packages (`ghcr.io/rhyolite-prime/sapo-engine:<version>`).
-Fetch it with:
+Clone [SapoEngine](https://github.com/rhyolite-prime/SapoEngine), build it and
+install the result straight into `vendor/sapo` — the same three commands CI
+runs:
 
 ```sh
-./scripts/fetch-sapo-engine.sh --dest build/sapo-prefix
+git clone https://github.com/rhyolite-prime/SapoEngine.git
+cmake -S SapoEngine -B SapoEngine/build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DSAPO_ENABLE_CPR=OFF \
+  -DSAPO_ENABLE_REDIS=ON \
+  -DSAPO_BUILD_TESTS=OFF
+cmake --build SapoEngine/build -j"$(nproc)"
+cmake --install SapoEngine/build --prefix "$PWD/vendor/sapo"
 ```
 
-In CI this needs **no stored secret**: the workflow's own `GITHUB_TOKEN`
-(`packages: read`) can pull the artifact because the package has been shared
-with this repository. That asymmetry is the whole design — a repo-scoped token
-cannot read another private repo's *source*, but it can read a *package* shared
-with it, so there is no PAT to mint, leak, or rotate.
-
-> One-time setup, in the SapoEngine package settings → **Manage Actions
-> access** → add `rhyolite-prime/WssdApi` with role *Read* (or set the package
-> visibility to *internal*). Until then every pull 403s however valid the token
-> is. The publishing workflow is checked in for reference at
-> [`docs/ci/sapo-engine-publish.yml`](ci/sapo-engine-publish.yml).
+The install tree is `bin/sapoc`, `include/sapo/`, `lib/libsapo_core.a` and
+`lib/cmake/SapoEngine/`. Build it with **GCC 13**: the engine is C++23, and
+linking an engine built by a different libstdc++ into WssdApi produces
+`undefined reference to std::__cxx11::basic_string<...>::_M_replace_cold`.
 
 ### CMake resolution order
 
 1. **A prebuilt install tree**, from the first of these holding a *complete*
    tree (`lib/libsapo_core.a` + `lib/cmake/SapoEngine/` + `bin/sapoc`):
-   `-DWSSD_SAPO_PREFIX=<dir>`, then `$SAPO_PREFIX`, then `vendor/sapo`. CI
-   passes `WSSD_SAPO_PREFIX` at the directory the fetch script unpacked.
+   `-DWSSD_SAPO_PREFIX=<dir>`, then `$SAPO_PREFIX`, then `vendor/sapo`. The
+   package exports the library as `Sapo::core`.
 2. **A source build** via `FetchContent`, only when no prebuilt tree was found
-   and `WSSD_SAPO_SOURCE` permits it. This requires git credentials for the
-   private repo, and pre-flights them with `git ls-remote` (with
-   `GIT_TERMINAL_PROMPT=0`) so you get instructions rather than an opaque 403
-   or a hung credential prompt.
+   and `WSSD_SAPO_SOURCE` permits it. The repository is public, so this needs
+   no credentials; a `git ls-remote` pre-flight turns an unreachable remote
+   into one clear message.
 
 `WSSD_SAPO_SOURCE` is `AUTO` (prebuilt, else source — the default for local
 dev), `ON` (source only, ignoring any prebuilt tree), or `OFF` (prebuilt only —
@@ -240,20 +238,23 @@ what CI uses, so it can never build an unpinned engine).
 
 Committed under `vendor/sapo` are the **headers and the CMake package config
 only** — enough for the engine-free tests to compile, never enough to link. The
-binaries are git-ignored on purpose; the artifact is the delivery mechanism.
+binaries are git-ignored on purpose: they come from the install step above.
 
 ### Local build
 
 ```sh
-./scripts/fetch-sapo-engine.sh --dest build/sapo-prefix
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWSSD_SAPO_PREFIX=build/sapo-prefix
+# after installing the engine into vendor/sapo as shown above
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=gcc-13 -DCMAKE_CXX_COMPILER=g++-13 \
+  -DWSSD_SAPO_PREFIX="$PWD/vendor/sapo" -DWSSD_SAPO_SOURCE=OFF
 cmake --build build -j"$(nproc)"
 ./build/WssdApi            # serves :5107 per config.json
 ```
 
-Requires CMake ≥ 3.28 (Ubuntu 22.04's apt CMake is 3.22) and Docker for the
-fetch script. Already built the engine yourself? Skip the script and point
-`-DWSSD_SAPO_PREFIX` at your own `cmake --install` tree.
+Requires CMake ≥ 3.28 (Ubuntu 22.04's apt CMake is 3.22). Run the binary from a
+directory that contains `config.json` and `sapo/`: both are resolved relative to
+the **working directory**, which is why a run from `cmake-build-debug/` reports
+`0 workflow(s)`.
 
 ### CI
 
@@ -300,8 +301,9 @@ toolchain drift between the two repos is an ABI bug, not a rebuild.
 | Hubtel session restarts mid-menu | State store lost (file store on an ephemeral disk, or Redis flushed) — use Redis in production |
 | Blueprint HTTP calls fail | Read the `[ussd] turn failed code=...` line: `HTTP_ERROR` = transport problem (DNS/TLS/refused/timeout — the message names the URL and cause), `HTTP_STATUS_ERROR` = downstream answered non-2xx, `VALIDATION_ERROR` = non-absolute URL in the blueprint (absolute `http(s)` URLs only). Redirects are followed (5 hops); express transient retries as node `retry` policies, not redials |
 | Logs show `resume failed ... restarting session` | Checkpoint expired between lookup and resume (gateway retry after a long pause) — expected, self-heals. Turn *execution* errors (e.g. `HTTP_ERROR` from a blueprint API call) no longer restart: they log `turn execution failed` with the underlying message instead |
-| CI fails at **Fetch Sapo Engine artifact** with a 403 | The ghcr package was never shared with this repository. SapoEngine package settings → *Manage Actions access* → add `rhyolite-prime/WssdApi` (Read). A perfectly valid `GITHUB_TOKEN` still 403s without this, because the token is scoped to WssdApi, not to the engine repo |
-| `Cannot reach https://github.com/rhyolite-prime/SapoEngine.git` at configure | CMake fell back to a source build and holds no credentials for the private repo. Run `./scripts/fetch-sapo-engine.sh --dest build/sapo-prefix` and pass `-DWSSD_SAPO_PREFIX=build/sapo-prefix`, or configure git `url.<…>.insteadOf` with a token as the error text shows |
+| CI fails at **Verify the engine prefix** with a version message | `SapoEngine` now builds a different version than `sapo-engine.lock` pins. Update the one line in `sapo-engine.lock`, or point `SAPO_ENGINE_REF` at the matching tag |
+| `undefined reference to ..._M_replace_cold` at link | Engine and app were built by different compilers. Build both with GCC 13 |
+| `Cannot reach https://github.com/rhyolite-prime/SapoEngine.git` at configure | No prebuilt tree was found and the clone failed (network/proxy). Install the engine into `vendor/sapo` as shown above and pass `-DWSSD_SAPO_PREFIX=$PWD/vendor/sapo` |
 | `No usable SapoEngine 0.4.0 was found` at configure | No *complete* prebuilt tree in any candidate prefix while `WSSD_SAPO_SOURCE=OFF` forbids a source build. Fetch the artifact, or re-configure without `-DWSSD_SAPO_SOURCE=OFF` |
 | `SapoEngine prefix … does not provide version 0.4.0` | That prefix was built from a different engine version than `sapo-engine.lock` pins — the `EXACT` check rejecting a stale artifact is the feature. Re-fetch, or bump the lock file deliberately |
 | `skipping incomplete SapoEngine prefix …/vendor/sapo` | Expected and harmless: only headers + CMake package config are committed there, never `libsapo_core.a`. It only matters if it is the *only* prefix found (then see the "No usable SapoEngine" row) |

@@ -109,6 +109,8 @@ namespace wssd_api::dto {
         [[nodiscard]] const std::string& getUserData() const { return userData_; }
         [[nodiscard]] bool getMsgType() const { return msgType_; }
         [[nodiscard]] const std::string& getNetwork() const { return network_; }
+        [[nodiscard]] const std::string& getSessionId() const { return sessionId_; }
+        // Backward-compatible alias for callers using the original DTO API.
         [[nodiscard]] const std::string& getSession() const { return sessionId_; }
 
         // Setters

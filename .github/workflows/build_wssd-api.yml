@@ -7,18 +7,19 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# The Sapo engine is consumed as a GitHub Packages (ghcr.io) OCI artifact, so
-# the job token needs read access to packages as well as the repo contents.
 permissions:
   contents: read
-  packages: read
 
 env:
   BUILD_TYPE: Release
-  # Prebuilt engine prefix. The repo tracks vendor/sapo's headers and CMake
-  # package config; the binaries (lib/libsapo_core.a, bin/sapoc) are gitignored
-  # and materialised here by scripts/fetch-sapo-engine.sh.
+  # The engine is built from source and installed here with
+  # `cmake --install build --prefix vendor/sapo`, exactly like the local
+  # workflow. The repo tracks vendor/sapo's headers and CMake package config;
+  # the binaries (lib/libsapo_core.a, bin/sapoc) are gitignored and produced by
+  # the install step below.
   SAPO_PREFIX_DIR: vendor/sapo
+  SAPO_ENGINE_REPO: https://github.com/rhyolite-prime/SapoEngine.git
+  SAPO_ENGINE_REF: master
 
 jobs:
   build:
@@ -31,15 +32,29 @@ jobs:
         with:
           submodules: recursive
 
-      # Step 2: Install dependencies for Drogon, PostgreSQL, and Redis
-      - name: Install dependencies
+      # Step 2: Toolchain + dependencies for Drogon, PostgreSQL and Redis.
+      #
+      # GCC 13 is MANDATORY, not a preference: SapoEngine's release workflow
+      # builds libsapo_core.a with g++-13 and its objects reference libstdc++ 13
+      # internals (e.g. std::string::_M_replace_cold). Linking them with
+      # ubuntu-22.04's default g++-11 fails at the final link with "undefined
+      # reference to ..._M_replace_cold". Drogon is built with the same
+      # compiler for the same reason: one libstdc++ ABI across the whole link.
+      - name: Install toolchain (GCC 13) and dependencies
         run: |
+          sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
           sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-13 g++-13
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100 \
+            --slave /usr/bin/g++ g++ /usr/bin/g++-13
           sudo apt-get install -y --no-install-recommends \
-            g++ git ca-certificates curl gnupg pkg-config make \
+            git ca-certificates curl gnupg pkg-config make \
             libjsoncpp-dev uuid-dev openssl libssl-dev zlib1g-dev \
             libpq-dev postgresql libhiredis-dev \
             libc-ares-dev libbrotli-dev doxygen graphviz dia
+          echo "CC=gcc-13"  >> "$GITHUB_ENV"
+          echo "CXX=g++-13" >> "$GITHUB_ENV"
+          g++-13 --version
 
       # Step 3: CMake >= 3.28 (ubuntu-22.04 ships 3.22, the project requires 3.28)
       - name: Install modern CMake
@@ -58,7 +73,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/drogon-install
-          key: drogon-${{ runner.os }}-ubuntu22.04-v1.9.7
+          key: drogon-${{ runner.os }}-ubuntu22.04-gcc13-v1.9.7
 
       - name: Build Drogon
         if: steps.cache-drogon.outputs.cache-hit != 'true'
@@ -67,6 +82,8 @@ jobs:
             https://github.com/drogonframework/drogon.git "$RUNNER_TEMP/drogon"
           cmake -S "$RUNNER_TEMP/drogon" -B "$RUNNER_TEMP/drogon/build" \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-13 \
+            -DCMAKE_CXX_COMPILER=g++-13 \
             -DCMAKE_INSTALL_PREFIX="$HOME/drogon-install" \
             -DBUILD_POSTGRESQL=ON \
             -DBUILD_EXAMPLES=OFF \
@@ -80,32 +97,73 @@ jobs:
           echo "CMAKE_PREFIX_PATH=$HOME/drogon-install" >> "$GITHUB_ENV"
           echo "LD_LIBRARY_PATH=$HOME/drogon-install/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
 
-      # Step 5: Materialise the prebuilt Sapo engine into vendor/sapo.
-      # The published artifact carries bin/, include/, lib/ and share/, i.e. the
-      # exact install tree find_package(SapoEngine 0.4.0 EXACT) expects. Without
-      # this step vendor/sapo only holds headers + the CMake config and the
-      # configure step fails ("incomplete SapoEngine prefix").
-      # The script tries the ghcr.io package first and, when that does not exist
-      # (SapoEngine only publishes it on tag pushes / workflow_dispatch, so an
-      # untagged engine gives "manifest unknown"), falls back to the `sapo-dist`
-      # artifact of the engine's latest successful build. The fallback needs a
-      # token that can read the private engine repo: add SAPO_ENGINE_TOKEN as a
-      # repository secret — the default GITHUB_TOKEN is scoped to this repo only.
-      - name: Fetch Sapo engine into vendor/sapo
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_ACTOR: ${{ github.actor }}
-          SAPO_ENGINE_TOKEN: ${{ secrets.SAPO_ENGINE_TOKEN }}
+      # Step 5: Build the Sapo engine and install it into vendor/sapo.
+      #
+      # Same three commands used locally:
+      #   cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSAPO_ENABLE_CPR=OFF \
+      #         -DSAPO_ENABLE_REDIS=ON -DSAPO_BUILD_TESTS=OFF
+      #   cmake --build build -j$(nproc)
+      #   cmake --install build --prefix sapo
+      # The resulting prefix is dropped in vendor/sapo, where WssdApi's
+      # CMakeLists already looks for it, and the app then builds like any other
+      # Drogon project.
+      #
+      # The install tree is cached against the engine commit, so a run only
+      # rebuilds the engine when SapoEngine actually moved.
+      - name: Resolve Sapo engine commit
         run: |
-          chmod +x scripts/fetch-sapo-engine.sh
-          ./scripts/fetch-sapo-engine.sh \
-            --mode auto \
-            --dest "$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}"
+          set -euo pipefail
+          SHA="$(git ls-remote "$SAPO_ENGINE_REPO" "refs/heads/${SAPO_ENGINE_REF}" | cut -f1)"
+          [[ -n "$SHA" ]] || { echo "cannot resolve ${SAPO_ENGINE_REF} in ${SAPO_ENGINE_REPO}"; exit 1; }
+          echo "SAPO_ENGINE_SHA=$SHA" >> "$GITHUB_ENV"
+          echo "Sapo engine ${SAPO_ENGINE_REF} = $SHA"
 
-      - name: Show resolved engine version
+      - name: Cache Sapo engine install tree
+        id: cache-sapo
+        uses: actions/cache@v4
+        with:
+          path: vendor/sapo
+          key: sapo-${{ runner.os }}-gcc13-${{ env.SAPO_ENGINE_SHA }}
+
+      - name: Build and install Sapo engine into vendor/sapo
+        if: steps.cache-sapo.outputs.cache-hit != 'true'
         run: |
-          grep -m1 '^SAPO_ENGINE_VERSION=' sapo-engine.lock
-          ls -l "${SAPO_PREFIX_DIR}/lib" "${SAPO_PREFIX_DIR}/bin"
+          set -euo pipefail
+          SRC="$RUNNER_TEMP/SapoEngine"
+          rm -rf "$SRC"
+          git clone --depth 1 --branch "$SAPO_ENGINE_REF" "$SAPO_ENGINE_REPO" "$SRC"
+          cmake -S "$SRC" -B "$SRC/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-13 \
+            -DCMAKE_CXX_COMPILER=g++-13 \
+            -DSAPO_ENABLE_CPR=OFF \
+            -DSAPO_ENABLE_REDIS=ON \
+            -DSAPO_BUILD_TESTS=OFF
+          cmake --build "$SRC/build" -j "$(nproc)"
+          # Keep the tracked headers/config from being mixed with a stale build.
+          rm -rf "$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}"
+          cmake --install "$SRC/build" --prefix "$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}"
+
+      - name: Verify the engine prefix
+        run: |
+          set -euo pipefail
+          PREFIX="$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}"
+          test -f "$PREFIX/lib/libsapo_core.a"
+          test -f "$PREFIX/lib/cmake/SapoEngine/SapoEngineConfig.cmake"
+          test -d "$PREFIX/include/sapo"
+          # sapoc is referenced by SapoEngineTargets-release.cmake's import check.
+          test -e "$PREFIX/bin/sapoc"
+          # sapo-engine.lock is enforced with find_package(... EXACT): surface a
+          # drift here, where the message is obvious, not inside CMake later.
+          PINNED="$(sed -n 's/^[[:space:]]*SAPO_ENGINE_VERSION=//p' sapo-engine.lock | tail -n1 | tr -d '[:space:]')"
+          BUILT="$(sed -n 's/^set(PACKAGE_VERSION[[:space:]]*"\(.*\)").*/\1/p' \
+            "$PREFIX/lib/cmake/SapoEngine/SapoEngineConfigVersion.cmake" | head -n1)"
+          echo "engine built: ${BUILT}   sapo-engine.lock pins: ${PINNED}"
+          if [[ "$BUILT" != "$PINNED" ]]; then
+            echo "::error::SapoEngine ${SAPO_ENGINE_REF} builds ${BUILT} but sapo-engine.lock pins ${PINNED}. Update sapo-engine.lock (one line) or point SAPO_ENGINE_REF at the matching tag."
+            exit 1
+          fi
+          ls -l "$PREFIX/lib" "$PREFIX/bin"
 
       # Step 6: Configure (no CMake cache can survive between runs, but keep the
       # explicit clean so a cached workspace can never poison the configure)
@@ -114,9 +172,12 @@ jobs:
           rm -rf build
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+            -DCMAKE_C_COMPILER=gcc-13 \
+            -DCMAKE_CXX_COMPILER=g++-13 \
             -DCMAKE_PREFIX_PATH="$HOME/drogon-install" \
             -DWSSD_SAPO_PREFIX="$GITHUB_WORKSPACE/${SAPO_PREFIX_DIR}" \
-            -DWSSD_SAPO_SOURCE=OFF
+            -DWSSD_SAPO_SOURCE=OFF \
+            -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
 
       # Step 7: Build your application
       - name: Build
@@ -131,7 +192,81 @@ jobs:
       - name: List build directory files
         run: ls -l build
 
-      # Step 10: Upload the binary as an artifact
+      # Step 10: Package for deployment.
+      #
+      # Two products, one build:
+      #   * build/WssdApi  — the bare binary (artifact "wssd-api"), for hosts
+      #                      that already have the runtime libraries installed
+      #   * wssd-api.run   — ONE self-contained executable file: shell stub +
+      #                      embedded tar payload (artifact "wssd-api-run").
+      #                      `wssd-api.run --extract DIR` reproduces the tree,
+      #                      so no separate tarball artifact is published.
+      #
+      # A truly static single ELF is not on the table: Drogon's PostgreSQL
+      # backend needs libpq, whose static build pulls in Kerberos/LDAP archives
+      # Ubuntu does not ship. So the single file carries its libraries inside
+      # itself and unpacks them once, on first start, into a content-addressed
+      # runtime directory. libstdc++/libgcc are already static (see Configure).
+      - name: Package release bundle
+        run: |
+          set -euo pipefail
+          DIST="$GITHUB_WORKSPACE/dist/wssd-api"
+          mkdir -p "$DIST/bin" "$DIST/lib"
+          cp build/WssdApi "$DIST/bin/"
+
+          # main.cc does loadConfigFile("config.json") — a path relative to the
+          # WORKING DIRECTORY — so the configs must sit at the bundle root, not
+          # in a config/ subdirectory, or startup fails immediately.
+          for f in config.json config.yaml; do
+            [[ -f "$f" ]] && cp "$f" "$DIST/"
+          done
+          [[ -d sapo ]] && cp -r sapo "$DIST/" || true
+
+          # Copy every resolved dependency except the ones glibc itself owns
+          # (copying those breaks the loader on a host with a different glibc).
+          ldd build/WssdApi | awk '/=> \//{print $3}' | sort -u > "$RUNNER_TEMP/deps.txt"
+          while read -r lib; do
+            case "$(basename "$lib")" in
+              libc.so.*|libm.so.*|libpthread.so.*|libdl.so.*|librt.so.*|\
+              ld-linux*|libgcc_s.so.*|libstdc++.so.*|libresolv.so.*) continue ;;
+            esac
+            cp -L "$lib" "$DIST/lib/"
+          done < "$RUNNER_TEMP/deps.txt"
+
+          cat > "$DIST/bin/wssd-api" <<'SH'
+          #!/usr/bin/env bash
+          # Launcher for the unpacked bundle: runs WssdApi against ../lib.
+          set -euo pipefail
+          HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+          export LD_LIBRARY_PATH="${HERE}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+          cd "${WSSD_WORKDIR:-$HERE}"
+          exec "${HERE}/bin/WssdApi" "$@"
+          SH
+          chmod +x "$DIST/bin/wssd-api"
+
+          ( cd "$DIST" && ls -1 lib ) > "$DIST/runtime-deps.txt"
+          ldd build/WssdApi > "$DIST/ldd.txt" || true
+          echo "--- bundled libraries ---"; cat "$DIST/runtime-deps.txt"
+
+      # Step 11: fold the whole bundle into ONE executable file.
+      - name: Build single-file executable (wssd-api.run)
+        run: |
+          set -euo pipefail
+          PAYLOAD="$RUNNER_TEMP/payload.tar.gz"
+          tar -C "$GITHUB_WORKSPACE/dist/wssd-api" -czf "$PAYLOAD" .
+          SHA="$(sha256sum "$PAYLOAD" | cut -c1-16)"
+          bash scripts/make-self-extracting.sh \
+            --payload "$PAYLOAD" \
+            --id "$SHA" \
+            --version "${GITHUB_SHA::7}" \
+            --output "$GITHUB_WORKSPACE/wssd-api.run"
+          ls -lh "$GITHUB_WORKSPACE/wssd-api.run"
+          "$GITHUB_WORKSPACE/wssd-api.run" --version
+          # Smoke test: unpack into a scratch dir and confirm the tree is intact.
+          "$GITHUB_WORKSPACE/wssd-api.run" --extract "$RUNNER_TEMP/selftest"
+          test -x "$RUNNER_TEMP/selftest/bin/WssdApi"
+          test -f "$RUNNER_TEMP/selftest/config.json"
+
       - name: Upload Binary
         uses: actions/upload-artifact@v4
         with:
