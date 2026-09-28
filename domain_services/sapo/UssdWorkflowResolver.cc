@@ -145,7 +145,7 @@ drogon::Task<std::optional<ResolvedWorkflow>> UssdWorkflowResolver::resolve(
 
     std::optional<ResolvedWorkflow> found;
     for (const auto &key : ordered) {
-        if (auto hit = co_await lookupDatabase(key)) {
+        if (auto hit = co_await lookupDatabase(dialCode)) {
             found = std::move(hit);
             break;
         }
