@@ -86,11 +86,10 @@ expect_code 200 "nalo dial" && {
     expect_jq '.SESSIONID == "'"$NALO_SESSION"'"' "nalo dial echoes SESSIONID"
 }
 
-# NOTE: the continuation deliberately sends a bogus SESSIONID — the Nalo
-# session is anchored on the MSISDN, so the flow must continue regardless.
+# Nalo uses the provider SESSIONID to correlate continuation turns.
 post /api/v1/ussd-interaction/nalo "$(cat <<JSON
 {"USERID": "wssd-test", "MSISDN": "233241234567", "USERDATA": "1",
- "MSGTYPE": true, "NETWORK": "MTN", "SESSIONID": "bogus-ignored-$TS"}
+ "MSGTYPE": true, "NETWORK": "MTN", "SESSIONID": "$NALO_SESSION"}
 JSON
 )"
 expect_code 200 "nalo continue" && {
@@ -109,7 +108,7 @@ JSON
 expect_code 200 "nalo invalid-choice dial" || true
 post /api/v1/ussd-interaction/nalo "$(cat <<JSON
 {"USERID": "wssd-test", "MSISDN": "233241234567", "USERDATA": "9",
- "MSGTYPE": true, "NETWORK": "MTN", "SESSIONID": "bogus-ignored-invalid-$TS"}
+ "MSGTYPE": true, "NETWORK": "MTN", "SESSIONID": "$NALO_SESSION_INVALID"}
 JSON
 )"
 expect_code 200 "nalo invalid choice" && {
@@ -155,12 +154,10 @@ expect_code 200 "hubtel release" && {
     expect_jq '.Type == "Release"' "hubtel release acknowledged"
 }
 
-# 6-8. Nalo SESSIONID is optional (MSISDN-anchored sessions); the
-# subscriber and service key are still mandatory.
+# 6-8. Nalo SESSIONID, subscriber and service key are mandatory.
 post /api/v1/ussd-interaction/nalo '{"USERID": "wssd-test", "MSISDN": "233249999999", "USERDATA": "*123#", "NETWORK": "MTN"}'
-expect_code 200 "nalo without SESSIONID works" && {
-    expect_jq '.MSGTYPE == true' "nalo SESSIONID-less dial keeps session open"
-    expect_jq '.MSG | contains("Welcome")' "nalo SESSIONID-less dial renders menu"
+expect_code 400 "nalo missing SESSIONID -> 400" && {
+    expect_jq '.success == false' "nalo SESSIONID validation reports success=false"
 }
 post /api/v1/ussd-interaction/nalo '{"USERID": "wssd-test", "USERDATA": "*123#"}'
 expect_code 400 "nalo missing MSISDN -> 400" && {

@@ -60,11 +60,10 @@ DROGON_TEST(ProviderAdaptersNaloNormalize) {
     Json::Value raw;
     raw["SESSIONID"] = "sess-1";
 
-    // Initiation: dial string in USERDATA, MSISDN-anchored session (the
-    // provider SESSIONID is ignored for identity, kept in raw for audit).
+    // Initiation: dial string in USERDATA and provider SESSIONID identity.
     const UssdInteraction start = normalizeNalo(dto, raw);
     CHECK(start.provider == UssdProvider::Nalo);
-    CHECK(start.networkSessionId == "233241234567");
+    CHECK(start.networkSessionId == "sess-1");
     CHECK(start.msisdn == "233241234567");
     CHECK(start.serviceKey == "wssd-nalo");
     CHECK(start.dialCode == "*123#");
@@ -72,14 +71,19 @@ DROGON_TEST(ProviderAdaptersNaloNormalize) {
     CHECK(!start.isRelease);
     CHECK(start.raw["SESSIONID"].asString() == "sess-1");
 
-    // Continuation: same subscriber, plain reply, same session key.
+    // Continuation: same provider session and plain reply keep the key.
     dto.setUserData("1");
-    dto.setSessionId("sess-2");
     const UssdInteraction cont = normalizeNalo(dto, raw);
-    CHECK(cont.networkSessionId == "233241234567");
+    CHECK(cont.networkSessionId == "sess-1");
     CHECK(cont.dialCode == "");
     CHECK(!cont.isStart);
     CHECK(!cont.isRelease);
+
+    // A new provider session from the same MSISDN must not reuse this flow.
+    dto.setSessionId("sess-2");
+    const UssdInteraction separate = normalizeNalo(dto, raw);
+    CHECK(separate.networkSessionId == "sess-2");
+    CHECK(separate.msisdn == cont.msisdn);
 }
 
 DROGON_TEST(UssdFlowBindingStoreMemory) {

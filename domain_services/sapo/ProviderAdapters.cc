@@ -99,12 +99,11 @@ std::string firstLine(const std::string &message, std::size_t maxLength) {
 UssdInteraction normalizeNalo(const dto::NaloUssdSessionRequestDto &dto, const Json::Value &raw) {
     UssdInteraction interaction;
     interaction.provider = UssdProvider::Nalo;
-    // Nalo passes no natural session id (SESSIONID is absent/unreliable),
-    // so the subscriber's MSISDN is the session key: every response the
-    // user sends back resolves to the same flow. The provider's SESSIONID
-    // (when present) survives untouched in `raw` for audit/debugging.
+    // Nalo now supplies a stable SESSIONID. Use it as the conversation key
+    // so concurrent/sequential sessions for the same subscriber cannot share
+    // a workflow checkpoint or flow binding.
     interaction.msisdn = normalizeMsisdn(dto.getMsisdn());
-    interaction.networkSessionId = interaction.msisdn;
+    interaction.networkSessionId = dto.getSessionId();
     interaction.userInput = dto.getUserData();
     interaction.serviceKey = dto.getUserId();
     interaction.dialCode = extractDialCode(dto.getUserData());
@@ -137,6 +136,7 @@ Json::Value renderNalo(const dto::NaloUssdSessionRequestDto &dto, const UssdResu
     dto::NaloUssdSessionResponse response;
     response.USERID = dto.getUserId();
     response.MSISDN = dto.getMsisdn();
+    response.SESSIONID = dto.getSessionId();
     response.USERDATA = dto.getUserData();
     response.MSGTYPE = result.cont;
     response.MSG = result.message;
