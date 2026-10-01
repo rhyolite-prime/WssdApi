@@ -1,0 +1,116 @@
+{
+  "name": "magma_pay_ussd_checkout",
+  "version": "1.0",
+  "description": "Magma Pay (Magma OnePay) USSD checkout plugin. POSTs /v1/payment/init on the mobile_money channel, which pushes a USSD/momo confirmation prompt to the payee's phone; the customer completes payment on the handset and Magma notifies the webhook_url. merchant_transaction_id is AUTO-GENERATED (uuid) when the caller does not supply one; it is returned in the output and is what the webhook/status calls reconcile against payment_token.",
+  "defaults": {
+    "currency": "XOF",
+    "channel": "mobile_money",
+    "country": "CI",
+    "description": "WSSD Payment"
+  },
+  "nodes": [
+    {
+      "id": "validate_request",
+      "type": "condition",
+      "label": "amount must be positive; payee phone (E.164) and callback_url are required",
+      "expression": "to_number(coalesce(amount, 0)) > 0 && is_empty(coalesce(payee, phone)) == false && is_empty(coalesce(callback_url, '')) == false",
+      "on_true": "generate_client_reference",
+      "on_false": "reject_invalid_request"
+    },
+    {
+      "id": "generate_client_reference",
+      "type": "noop",
+      "label": "AUTO-GENERATED FIELD: merchant_transaction_id",
+      "assign": {
+        "client_reference": "${coalesce(client_reference, uuid())}",
+        "payee_msisdn": "${coalesce(payee, phone)}"
+      },
+      "next": "magma_init"
+    },
+    {
+      "id": "magma_init",
+      "type": "command",
+      "command": "http.post",
+      "http_request": {
+        "url": "${coalesce(gateway_url, config.payments.magma_pay.init_url)}",
+        "headers": {
+          "Authorization": "${concat('Bearer ', coalesce(gateway_token, secret.magma_pay_token))}",
+          "X-User-Secret": "${coalesce(gateway_user_secret, secret.magma_pay_user_secret)}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "merchant_transaction_id": "${client_reference}",
+          "amount": "${to_number(amount)}",
+          "currency": "${currency}",
+          "description": "${description}",
+          "payee": "${payee_msisdn}",
+          "channel": "${channel}",
+          "webhook_url": "${callback_url}",
+          "custom_field": "${coalesce(custom_field, '')}"
+        },
+        "timeout": 60000
+      },
+      "output": {
+        "provider_code": "$.body.code",
+        "payment_status": "$.body.data.payment_status",
+        "payment_token": "$.body.data.payment_token",
+        "payment_method": "$.body.data.payment_method",
+        "payment_channel": "$.body.data.channel",
+        "requires_otp": "$.body.data.meta.otp",
+        "otp_length": "$.body.data.meta.otp_length",
+        "payment_instructions": "$.body.data.meta.before_payment_instructions",
+        "provider_message": "$.body.message"
+      },
+      "on_error": "initiation_failed",
+      "next": "check_init"
+    },
+    {
+      "id": "check_init",
+      "type": "condition",
+      "expression": "to_number(coalesce(provider_code, 0)) == 200 && !starts_with(coalesce(to_string(payment_token), ''), '$.')",
+      "on_true": "prompt_dispatched",
+      "on_false": "initiation_rejected",
+      "label": "Magma success is body.code 200 with a data.payment_token"
+    },
+    {
+      "id": "prompt_dispatched",
+      "type": "terminate",
+      "status": "success",
+      "message": "Magma Pay accepted the payment; the customer confirms on their phone (USSD/momo prompt).",
+      "output": {
+        "provider": "magma_pay",
+        "mode": "ussd_checkout",
+        "payment_token": "${payment_token}",
+        "payment_status": "${coalesce(payment_status, 'new')}",
+        "payment_method": "${coalesce(payment_method, null)}",
+        "client_reference": "${client_reference}",
+        "amount": "${to_number(amount)}",
+        "currency": "${currency}",
+        "payee": "${payee_msisdn}",
+        "requires_otp": "${coalesce(requires_otp, false)}",
+        "instructions": "${coalesce(payment_instructions, provider_message, '')}"
+      }
+    },
+    {
+      "id": "initiation_rejected",
+      "type": "terminate",
+      "status": "failed",
+      "error_code": "MAGMA_INIT_REJECTED",
+      "message": "${concat('Magma Pay rejected the payment initiation: ', coalesce(provider_message, 'no payment token in the response'))}"
+    },
+    {
+      "id": "initiation_failed",
+      "type": "terminate",
+      "status": "failed",
+      "error_code": "MAGMA_INIT_CALL_FAILED",
+      "message": "${concat('Magma Pay init call failed: ', coalesce(error.data.body.message, error.message, 'unknown error'))}"
+    },
+    {
+      "id": "reject_invalid_request",
+      "type": "terminate",
+      "status": "failed",
+      "error_code": "INVALID_REQUEST",
+      "message": "amount must be positive, a payee phone number (E.164, e.g. +2250707000200) and callback_url are required."
+    }
+  ]
+}

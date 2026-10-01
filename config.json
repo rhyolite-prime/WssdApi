@@ -298,10 +298,13 @@
             //config: The configuration of the plugin. This json object is the parameter to initialize the plugin.
             //Environment overrides (see SapoSettings::applyEnvOverrides): SAPO_WORKFLOW_DIR,
             //SAPO_CONFIG_PATH, SAPO_STATE_DIR, SAPO_REDIS_URL (or SAPO_REDIS_HOST/PORT),
-            //SAPO_LOG_LEVEL, SAPO_DEFAULT_WORKFLOW.
+            //SAPO_LOG_LEVEL, SAPO_DEFAULT_WORKFLOW, SAPO_PLUGIN_DIR.
             "config": {
                 //workflow_directory: *.json blueprints loaded once at startup
                 "workflow_directory": "sapo/workflows",
+                //plugin_directory: *.json plugin blueprints runnable by name via
+                //POST /api/v1/sapo/plugins/execute ("" disables directory loading)
+                "plugin_directory": "sapo/plugins",
                 //config_path: optional sapo-dev-config.json (provider config, secrets, engine tunables)
                 "config_path": "sapo/sapo-config.json",
                 //state_directory: file state store (used when redis_url is empty)

@@ -11,6 +11,7 @@ project(WssdApi_test CXX)
 add_executable(${PROJECT_NAME}
         test_main.cc
         test_sapo_adapters.cc
+        test_sapo_plugin_outcome.cc
         ../domain_services/sapo/ProviderAdapters.cc
         ../domain_services/sapo/UssdFlowBindingStore.cc)
 

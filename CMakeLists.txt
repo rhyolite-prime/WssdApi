@@ -76,6 +76,8 @@ add_executable(${PROJECT_NAME} main.cc
         domain_services/sapo/UssdInteraction.h
         domain_services/sapo/DrogonLogSink.h
         domain_services/sapo/BlockingRunner.h
+        domain_services/sapo/PluginOutcomeMapper.h
+        dto/SapoPluginDto.h
         utils/JsonBridge.h
 )
 

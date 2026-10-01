@@ -36,6 +36,10 @@ struct SapoSettings {
     std::string logLevel = "info";
     /// Fallback blueprint stem: sapo-dev/workflows/<name>.json.
     std::string defaultWorkflowFile = "default";
+    /// Directory of *.json plugin blueprints registered at startup and run by
+    /// name through the plugin execution endpoint (SapoPluginController).
+    /// Empty disables directory loading (named/inline execution still works).
+    std::string pluginDirectory = "sapo/plugins";
     /// Threads for blocking engine calls; 0 => hardware-based default.
     std::size_t blockingThreads = 8;
 
@@ -45,7 +49,7 @@ struct SapoSettings {
     /// Applies SAPO_* environment overrides on top of file configuration:
     /// SAPO_WORKFLOW_DIR, SAPO_CONFIG_PATH, SAPO_STATE_DIR, SAPO_REDIS_URL
     /// (or SAPO_REDIS_HOST + SAPO_REDIS_PORT), SAPO_REDIS_PASSWORD,
-    /// SAPO_LOG_LEVEL, SAPO_DEFAULT_WORKFLOW.
+    /// SAPO_LOG_LEVEL, SAPO_DEFAULT_WORKFLOW, SAPO_PLUGIN_DIR.
     void applyEnvOverrides();
 };
 

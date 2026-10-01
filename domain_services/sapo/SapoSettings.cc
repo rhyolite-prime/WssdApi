@@ -45,6 +45,9 @@ SapoSettings SapoSettings::fromJson(const Json::Value &config) {
     if (config.isMember("default_workflow") && config["default_workflow"].isString()) {
         settings.defaultWorkflowFile = config["default_workflow"].asString();
     }
+    if (config.isMember("plugin_directory") && config["plugin_directory"].isString()) {
+        settings.pluginDirectory = config["plugin_directory"].asString();
+    }
     if (config.isMember("blocking_threads") && config["blocking_threads"].isUInt()) {
         settings.blockingThreads = config["blocking_threads"].asUInt();
     }
@@ -81,6 +84,10 @@ void SapoSettings::applyEnvOverrides() {
     const std::string defaultWorkflow = getenvOr("SAPO_DEFAULT_WORKFLOW");
     if (!defaultWorkflow.empty()) {
         defaultWorkflowFile = defaultWorkflow;
+    }
+    const std::string pluginDir = getenvOr("SAPO_PLUGIN_DIR");
+    if (!pluginDir.empty()) {
+        pluginDirectory = pluginDir;
     }
 }
 

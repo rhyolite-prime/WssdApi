@@ -304,6 +304,24 @@ std::vector<std::string> SapoEngineService::start() {
         // Input-driven USSD turns need no ticking, but `wait` nodes and prompt
         // timeouts only fire while the scheduler runs.
         vm_->startBackgroundTick(std::chrono::milliseconds(500));
+
+        // Plugin blueprints (sapo/plugins/*.json by default): registered
+        // alongside the USSD workflow directory so the plugin execution
+        // endpoint can run them by name. Problems are collected and logged
+        // by the engine, never thrown, and a missing directory just means
+        // only inline/registered-by-name execution is available.
+        if (!settings_.pluginDirectory.empty()) {
+            std::error_code dirError;
+            const bool usable = std::filesystem::is_directory(settings_.pluginDirectory, dirError);
+            if (usable && !dirError) {
+                const size_t added = vm_->addBlueprintDirectory(settings_.pluginDirectory);
+                LOG_INFO << "[sapo-dev] plugin directory: " << settings_.pluginDirectory << " (" << added
+                         << " blueprints registered)";
+            } else {
+                LOG_INFO << "[sapo-dev] no plugin directory at '" << settings_.pluginDirectory
+                         << "'; named plugins must be supplied inline";
+            }
+        }
     } catch (const std::exception &e) {
         started_.store(false);
         return {std::string("sapo-dev engine start threw: ") + e.what()};
@@ -559,6 +577,64 @@ nlohmann::json SapoEngineService::metrics() const {
         LOG_ERROR << "[sapo-dev] metrics failed: " << e.what();
         return nlohmann::json::object();
     }
+}
+
+nlohmann::json SapoEngineService::describe() const {
+    if (!vm_) {
+        return nlohmann::json::object();
+    }
+    try {
+        return vm_->describe();
+    } catch (const std::exception &e) {
+        LOG_ERROR << "[sapo-dev] describe failed: " << e.what();
+        return nlohmann::json::object();
+    }
+}
+
+sapo::runtime::ExecutionOutcome SapoEngineService::executePlugin(const std::string &pluginId,
+                                                                 const std::string &blueprintJson,
+                                                                 nlohmann::json input,
+                                                                 const std::string &sapoSessionId,
+                                                                 const std::string &correlationId,
+                                                                 bool persist) {
+    if (!vm_) {
+        return failedOutcome(pluginId, sapoSessionId, "NOT_CONFIGURED",
+                             "sapo-dev engine is not configured", "");
+    }
+    std::string blueprintError;
+    const std::string workflowId = ensureBlueprint(pluginId, blueprintJson, blueprintError);
+    if (workflowId.empty()) {
+        // No blueprint supplied and no registered workflow of that id: the
+        // caller named a plugin that does not exist (404), distinct from a
+        // supplied blueprint that failed to parse (422) farther below.
+        if (blueprintJson.empty() && blueprintError.rfind("unknown workflow", 0) == 0) {
+            return failedOutcome(pluginId, sapoSessionId, "UNKNOWN_PLUGIN", blueprintError, "");
+        }
+        // A registration/parse rejection is a caller error (bad blueprint
+        // JSON), kept distinct from an execution failure so the API maps it
+        // to 422 rather than a generic failure outcome.
+        return failedOutcome(pluginId, sapoSessionId, "BLUEPRINT_REJECTED", blueprintError, "");
+    }
+    sapo::runtime::StartSessionOptions options;
+    options.session_id = sapoSessionId;
+    options.correlation_id = correlationId;
+    options.persist = persist;
+    try {
+        return vm_->startSession(workflowId, input, options);
+    } catch (const sapo::runtime::SapoError &e) {
+        return failedOutcome(workflowId, sapoSessionId, sapo::runtime::toString(e.code()), e.what(),
+                             e.nodeId());
+    } catch (const std::exception &e) {
+        return failedOutcome(workflowId, sapoSessionId, "INTERNAL_ERROR", e.what(), "");
+    }
+}
+
+sapo::runtime::ExecutionOutcome SapoEngineService::resumePluginSession(const std::string &sapoSessionId,
+                                                                       const nlohmann::json &input) {
+    // Identical engine semantics to the USSD resume path (store the input
+    // verbatim, run until the next suspend/finish); named separately so the
+    // plugin API does not depend on USSD terminology.
+    return resumeUssdSession(sapoSessionId, input);
 }
 
 sapo::runtime::ExecutionOutcome SapoEngineService::failedOutcome(const std::string &workflowId,

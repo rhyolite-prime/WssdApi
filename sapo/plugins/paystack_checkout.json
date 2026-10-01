@@ -1,0 +1,103 @@
+{
+  "name": "paystack_checkout",
+  "version": "1.0",
+  "description": "Paystack Checkout plugin. POSTs /transaction/initialize (Bearer auth) and returns the authorization_url for the frontend to redirect to. The payment reference is AUTO-GENERATED (uuid) when the caller does not supply one; it is returned in the output and is what the Paystack callback/verify flow reconciles. The customer email falls back to <msisdn>@rhyoliteprime.com when only a phone number is supplied (matching the merchant's existing integration). NOTE: Paystack amounts are in the lowest currency unit (pesewas for GHS) — pass amount already converted.",
+  "defaults": {
+    "currency": "GHS"
+  },
+  "nodes": [
+    {
+      "id": "validate_request",
+      "type": "condition",
+      "label": "amount must be positive and a callback_url is required",
+      "expression": "to_number(coalesce(amount, 0)) > 0 && is_empty(coalesce(callback_url, '')) == false",
+      "on_true": "generate_client_reference",
+      "on_false": "reject_invalid_request"
+    },
+    {
+      "id": "generate_client_reference",
+      "type": "noop",
+      "label": "AUTO-GENERATED FIELDS: payment reference + derived customer email",
+      "assign": {
+        "client_reference": "${coalesce(client_reference, uuid())}",
+        "customer_email": "${coalesce(customer_email, concat(coalesce(phone, msisdn, 'customer'), '@rhyoliteprime.com'))}"
+      },
+      "next": "paystack_initialize"
+    },
+    {
+      "id": "paystack_initialize",
+      "type": "command",
+      "command": "http.post",
+      "http_request": {
+        "url": "${coalesce(gateway_url, config.payments.paystack.initialize_url)}",
+        "headers": {
+          "Authorization": "${concat('Bearer ', coalesce(gateway_secret_key, secret.paystack_secret_key))}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "email": "${customer_email}",
+          "amount": "${amount}",
+          "currency": "${currency}",
+          "reference": "${client_reference}",
+          "callback_url": "${callback_url}"
+        },
+        "timeout": 60000
+      },
+      "output": {
+        "checkout_url": "$.body.data.authorization_url",
+        "access_code": "$.body.data.access_code",
+        "provider_reference": "$.body.data.reference",
+        "provider_status": "$.body.status",
+        "provider_message": "$.body.message"
+      },
+      "on_error": "initiation_failed",
+      "next": "check_checkout_url"
+    },
+    {
+      "id": "check_checkout_url",
+      "type": "condition",
+      "expression": "coalesce(provider_status, false) == true && !starts_with(coalesce(to_string(checkout_url), ''), '$.')",
+      "on_true": "checkout_ready",
+      "on_false": "initiation_rejected",
+      "label": "Paystack success is body.status true with an authorization_url"
+    },
+    {
+      "id": "checkout_ready",
+      "type": "terminate",
+      "status": "success",
+      "message": "Paystack transaction initialized; redirect the customer to checkout_url.",
+      "output": {
+        "provider": "paystack",
+        "mode": "web_checkout",
+        "checkout_url": "${checkout_url}",
+        "access_code": "${coalesce(access_code, null)}",
+        "client_reference": "${client_reference}",
+        "amount": "${amount}",
+        "currency": "${currency}",
+        "customer_email": "${customer_email}",
+        "provider_message": "${coalesce(provider_message, 'Authorization URL created')}"
+      }
+    },
+    {
+      "id": "initiation_rejected",
+      "type": "terminate",
+      "status": "failed",
+      "error_code": "PAYSTACK_INIT_REJECTED",
+      "message": "${concat('Paystack rejected the initialization: ', coalesce(provider_message, 'no authorization_url in the response'))}"
+    },
+    {
+      "id": "initiation_failed",
+      "type": "terminate",
+      "status": "failed",
+      "error_code": "PAYSTACK_INIT_CALL_FAILED",
+      "message": "${concat('Paystack initialize call failed: ', coalesce(error.data.body.message, error.message, 'unknown error'))}"
+    },
+    {
+      "id": "reject_invalid_request",
+      "type": "terminate",
+      "status": "failed",
+      "error_code": "INVALID_REQUEST",
+      "message": "amount must be a positive number in the lowest currency unit (pesewas for GHS) and callback_url is required."
+    }
+  ]
+}

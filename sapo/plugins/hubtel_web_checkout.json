@@ -1,0 +1,109 @@
+{
+  "name": "hubtel_web_checkout",
+  "version": "1.0",
+  "description": "Hubtel Web Checkout plugin. POSTs /items/initiate on the Hubtel PayProxy API (Basic auth) and returns the hosted checkout URL for the frontend to redirect to. clientReference is AUTO-GENERATED (uuid) when the caller does not supply one, so every payment is traceable; the generated value is returned in the output and echoed back by Hubtel callbacks.",
+  "defaults": {
+    "description": "WSSD Payment"
+  },
+  "nodes": [
+    {
+      "id": "validate_request",
+      "type": "condition",
+      "label": "amount must be positive and a callback_url is required (Hubtel posts the result there)",
+      "expression": "to_number(coalesce(amount, 0)) > 0 && is_empty(coalesce(callback_url, '')) == false",
+      "on_true": "generate_client_reference",
+      "on_false": "reject_invalid_request"
+    },
+    {
+      "id": "generate_client_reference",
+      "type": "noop",
+      "label": "AUTO-GENERATED FIELDS: clientReference + config-backed url defaults",
+      "assign": {
+        "client_reference": "${coalesce(client_reference, uuid())}",
+        "return_url": "${coalesce(return_url, config.payments.hubtel.return_url)}",
+        "cancellation_url": "${coalesce(cancellation_url, config.payments.hubtel.cancellation_url)}"
+      },
+      "next": "hubtel_initiate"
+    },
+    {
+      "id": "hubtel_initiate",
+      "type": "command",
+      "command": "http.post",
+      "http_request": {
+        "url": "${coalesce(gateway_url, config.payments.hubtel.initiate_url)}",
+        "auth": {
+          "type": "basic",
+          "username": "${coalesce(gateway_client_id, secret.hubtel_client_id)}",
+          "password": "${coalesce(gateway_client_secret, secret.hubtel_client_secret)}"
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "totalAmount": "${to_number(amount)}",
+          "description": "${description}",
+          "merchantAccountNumber": "${config.payments.hubtel.merchant_account}",
+          "clientReference": "${client_reference}",
+          "callbackUrl": "${callback_url}",
+          "returnUrl": "${return_url}",
+          "cancellationUrl": "${cancellation_url}"
+        },
+        "timeout": 60000
+      },
+      "output": {
+        "checkout_url": "$.body.data.checkoutUrl",
+        "checkout_id": "$.body.data.checkoutId",
+        "provider_reference": "$.body.data.clientReference",
+        "provider_code": "$.body.responseCode",
+        "provider_message": "$.body.message"
+      },
+      "on_error": "initiation_failed",
+      "next": "check_checkout_url"
+    },
+    {
+      "id": "check_checkout_url",
+      "type": "condition",
+      "expression": "coalesce(provider_code, '') == '0000' && !starts_with(coalesce(to_string(checkout_url), ''), '$.')",
+      "on_true": "checkout_ready",
+      "on_false": "initiation_rejected",
+      "label": "Hubtel success is responseCode '0000' with a checkoutUrl"
+    },
+    {
+      "id": "checkout_ready",
+      "type": "terminate",
+      "status": "success",
+      "message": "Hubtel checkout initiated; redirect the customer to checkout_url.",
+      "output": {
+        "provider": "hubtel",
+        "mode": "web_checkout",
+        "checkout_url": "${checkout_url}",
+        "checkout_id": "${coalesce(checkout_id, null)}",
+        "client_reference": "${client_reference}",
+        "amount": "${to_number(amount)}",
+        "description": "${description}",
+        "provider_message": "${coalesce(provider_message, 'Checkout initiated')}"
+      }
+    },
+    {
+      "id": "initiation_rejected",
+      "type": "terminate",
+      "status": "failed",
+      "error_code": "HUBTEL_CHECKOUT_REJECTED",
+      "message": "${concat('Hubtel rejected the checkout initiation: ', coalesce(provider_message, 'no checkout URL in the response'))}"
+    },
+    {
+      "id": "initiation_failed",
+      "type": "terminate",
+      "status": "failed",
+      "error_code": "HUBTEL_INITIATE_CALL_FAILED",
+      "message": "${concat('Hubtel initiate call failed: ', coalesce(error.data.body.message, error.message, 'unknown error'))}"
+    },
+    {
+      "id": "reject_invalid_request",
+      "type": "terminate",
+      "status": "failed",
+      "error_code": "INVALID_REQUEST",
+      "message": "amount must be a positive number (major units, e.g. 12.50 GHS) and callback_url is required."
+    }
+  ]
+}

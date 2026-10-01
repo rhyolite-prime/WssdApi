@@ -6,6 +6,10 @@ USSD turn; gateways keep their own wire models and the engine only ever sees
 provider-neutral JSON. The engine repository is public and is consumed as
 a published artifact, never cloned — see [Build](#build).
 
+The same engine also powers generic **plugin execution** over REST (payment
+checkout plugins, ad-hoc blueprint runs, async resume) — see
+[SAPO_PLUGIN_EXECUTION.md](SAPO_PLUGIN_EXECUTION.md).
+
 ```
                 Nalo webhook                    Hubtel webhook
   handset ---> POST /api/v1/ussd-interaction/nalo|hubtel ---> handset
@@ -287,6 +291,12 @@ toolchain drift between the two repos is an ABI bug, not a rebuild.
   watch for `[ussd]`/`[sapo]` log lines plus `ussd_sessions` audit rows.
 * Engine-only blueprint debugging stays in SapoEngine (`sapoc run`,
   record/replay transports) — no gateway needed.
+* The plugin-execution endpoint (`/api/v1/sapo/plugins/execute`) runs the
+  payment/checkout blueprints from `sapo/plugins/` — see
+  [SAPO_PLUGIN_EXECUTION.md](SAPO_PLUGIN_EXECUTION.md). A validation harness
+  (`test/plugin_harness.cc`-style runs) replays them against the engine's
+  `MockTransport` (53 checks), and the same blueprints were exercised
+  end-to-end against a scripted mock gateway through the live API.
 
 ## Troubleshooting
 

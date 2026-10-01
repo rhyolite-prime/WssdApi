@@ -1,0 +1,93 @@
+{
+  "name": "paystack_verify",
+  "version": "1.0",
+  "description": "Paystack transaction status plugin. GETs /transaction/verify/{reference} (Bearer auth) and normalizes the payment status into a small output envelope the caller can branch on. Accepts the reference as client_reference (auto-generated at checkout time) or the provider's own reference. A verified-but-unsuccessful payment is a successful plugin run with paid=false — only call/validation failures fail the run.",
+  "nodes": [
+    {
+      "id": "validate_reference",
+      "type": "condition",
+      "expression": "is_empty(coalesce(client_reference, reference)) == false",
+      "on_true": "paystack_verify_call",
+      "on_false": "reject_missing_reference"
+    },
+    {
+      "id": "paystack_verify_call",
+      "type": "command",
+      "command": "http.get",
+      "http_request": {
+        "url": "${concat(coalesce(gateway_url, config.payments.paystack.verify_url), '/', coalesce(client_reference, reference))}",
+        "headers": {
+          "Authorization": "${concat('Bearer ', coalesce(gateway_secret_key, secret.paystack_secret_key))}"
+        },
+        "timeout": 60000
+      },
+      "output": {
+        "verification_status": "$.body.data.status",
+        "gateway_response": "$.body.data.gateway_response",
+        "paid_amount": "$.body.data.amount",
+        "paid_currency": "$.body.data.currency",
+        "paid_at": "$.body.data.paid_at",
+        "payment_channel": "$.body.data.channel",
+        "receipt_number": "$.body.data.receipt_number",
+        "provider_message": "$.body.message"
+      },
+      "on_error": "verification_failed",
+      "next": "check_status"
+    },
+    {
+      "id": "check_status",
+      "type": "condition",
+      "expression": "coalesce(verification_status, '') == 'success'",
+      "on_true": "payment_confirmed",
+      "on_false": "payment_not_successful"
+    },
+    {
+      "id": "payment_confirmed",
+      "type": "terminate",
+      "status": "success",
+      "message": "Payment confirmed by Paystack.",
+      "output": {
+        "provider": "paystack",
+        "mode": "verify",
+        "paid": true,
+        "status": "${verification_status}",
+        "gateway_response": "${coalesce(gateway_response, null)}",
+        "client_reference": "${coalesce(client_reference, reference)}",
+        "amount": "${coalesce(paid_amount, null)}",
+        "currency": "${coalesce(paid_currency, null)}",
+        "channel": "${coalesce(payment_channel, null)}",
+        "paid_at": "${coalesce(paid_at, null)}",
+        "receipt_number": "${coalesce(receipt_number, null)}"
+      }
+    },
+    {
+      "id": "payment_not_successful",
+      "type": "terminate",
+      "status": "success",
+      "message": "Paystack verified the transaction; it is not in a successful state.",
+      "output": {
+        "provider": "paystack",
+        "mode": "verify",
+        "paid": false,
+        "status": "${coalesce(verification_status, 'unknown')}",
+        "gateway_response": "${coalesce(gateway_response, null)}",
+        "client_reference": "${coalesce(client_reference, reference)}",
+        "provider_message": "${coalesce(provider_message, null)}"
+      }
+    },
+    {
+      "id": "verification_failed",
+      "type": "terminate",
+      "status": "failed",
+      "error_code": "PAYSTACK_VERIFY_CALL_FAILED",
+      "message": "${concat('Paystack verify call failed: ', coalesce(error.data.body.message, error.message, 'unknown error'))}"
+    },
+    {
+      "id": "reject_missing_reference",
+      "type": "terminate",
+      "status": "failed",
+      "error_code": "MISSING_REFERENCE",
+      "message": "Provide the payment reference as 'client_reference' (preferred) or 'reference'."
+    }
+  ]
+}

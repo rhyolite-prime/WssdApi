@@ -121,6 +121,33 @@ class SapoEngineService {
 
     [[nodiscard]] nlohmann::json metrics() const;
 
+    /// Describes the engine registry (registered workflows incl. plugin
+    /// blueprints) via VirtualMachine::describe(). Empty object when the
+    /// engine is not configured.
+    [[nodiscard]] nlohmann::json describe() const;
+
+    /// Executes a DSL blueprint as a plugin: registers `blueprintJson` under
+    /// `pluginId` first when supplied (content-hashed re-registration, so
+    /// unchanged blueprints are a cheap no-op), then starts a session with
+    /// `input` as the initial context. An empty `blueprintJson` runs the
+    /// already-registered `pluginId` (startup directories or an earlier
+    /// inline execution). `persist=false` keeps the run stateless: no
+    /// checkpoint is written, so a plugin that suspends mid-run cannot be
+    /// resumed afterwards — only use it for strictly synchronous plugins.
+    /// Never throws: engine exceptions become failed outcomes.
+    sapo::runtime::ExecutionOutcome executePlugin(const std::string &pluginId,
+                                                   const std::string &blueprintJson,
+                                                   nlohmann::json input,
+                                                   const std::string &sapoSessionId,
+                                                   const std::string &correlationId,
+                                                   bool persist = true);
+
+    /// Resumes a suspended plugin session (`awaiting_input` / `suspended`)
+    /// with `input` — a prompt reply or an event payload. Same engine
+    /// semantics as resumeUssdSession: the value is stored verbatim.
+    sapo::runtime::ExecutionOutcome resumePluginSession(const std::string &sapoSessionId,
+                                                        const nlohmann::json &input);
+
   private:
     SapoEngineService() = default;
     ~SapoEngineService();

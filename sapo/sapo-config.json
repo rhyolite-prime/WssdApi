@@ -7,11 +7,30 @@
     "max_depth": 8,
     "default_timeout_ms": 180000
   },
-  "secrets": {},
+  "secrets": {
+    "_comment": "Referenced from blueprints as secret.<name> (e.g. ${secret.paystack_secret_key}). Expected keys for the sample payment plugins: hubtel_client_id, hubtel_client_secret, paystack_secret_key, magma_pay_token, magma_pay_user_secret. Keys intentionally NOT defined here: an empty committed value would shadow the engine's SAPO_SECRET_<NAME> environment fallback (e.g. SAPO_SECRET_PAYSTACK_SECRET_KEY), which is how production injects secrets."
+  },
   "config": {
     "ussd": {
       "default_language": "en",
       "currency": "GHS"
+    },
+    "payments": {
+      "_comment": "Provider endpoints and public merchant config for the sample checkout plugins in sapo/plugins/. Referenced as ${config.payments.<provider>.<key>}.",
+      "hubtel": {
+        "initiate_url": "https://payproxyapi.hubtel.com/items/initiate",
+        "merchant_account": "2037871",
+        "return_url": "https://wssd.rhyoliteprime.com",
+        "cancellation_url": "https://wssd.rhyoliteprime.com"
+      },
+      "paystack": {
+        "initialize_url": "https://api.paystack.co/transaction/initialize",
+        "verify_url": "https://api.paystack.co/transaction/verify"
+      },
+      "magma_pay": {
+        "init_url": "https://api.magmaonepay.com/v1/payment/init",
+        "status_url": "https://api.magmaonepay.com/v1/payment/status"
+      }
     }
   },
   "providers": {},
