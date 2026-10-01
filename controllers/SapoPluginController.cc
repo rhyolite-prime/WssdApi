@@ -143,7 +143,7 @@ void SapoPluginController::executePlugin(const HttpRequestPtr &req, Callback &&c
     }
 
     // Context: metadata keys first, variables overlay them (variables win),
-    // and the raw metadata stays available to the blueprint as $metadata.
+    // and the raw metadata stays available to the blueprint as ${metadata.*} (context key "metadata").
     nlohmann::json input = nlohmann::json::object();
     if (request.getMetadata().isObject()) {
         nlohmann::json metadata = wssd_api::utils::toNlohmann(request.getMetadata());

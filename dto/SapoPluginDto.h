@@ -44,7 +44,7 @@ namespace wssd_api::dto {
                 variables_ = json["input"];
             }
             // Additional metadata: merged into the context (variables win on
-            // key conflicts) and exposed under the reserved `$metadata` key.
+            // key conflicts) and exposed under the `metadata` context key (referenced as `${metadata.x}`).
             if (json.isMember("metadata") && json["metadata"].isObject()) {
                 metadata_ = json["metadata"];
             }

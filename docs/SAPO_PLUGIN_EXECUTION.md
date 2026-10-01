@@ -29,7 +29,7 @@ Body (all JSON):
 | `plugin`         | string  | Registered blueprint id (`hubtel_web_checkout`, …); aliases `plugin_id`, `workflow_id`. Either this or `blueprint` is required. |
 | `blueprint`      | object/array | Inline DSL blueprint: workflow object `{name?, nodes:[...]}` or a bare node array. Registers under the given id, deterministically hashed. |
 | `variables`      | object  | Initial context (execution "meta data"). Alias: `input`. |
-| `metadata`       | object  | Extra context: merged first so `variables` wins key conflicts; raw copy preserved under `$metadata`. |
+| `metadata`       | object  | Extra context: merged first so `variables` wins key conflicts; raw copy preserved under the `metadata` context key (`${metadata.x}`). |
 | `session_id`     | string  | Client-pinned session id (e.g. idempotency). Default: `plugin:<slug>:<uuid>`. **Re-using an existing id resumes that session's flow if possible** — pin stable ids for at-most-once execution. |
 | `correlation_id` | string  | Tracing id in engine report/logs. Default: `plugin:<session_id>`. |
 | `persist`        | bool    | Default `true`: keep the checkpoint so suspended flows can be resumed. `false` => checkpoint removed at completion (one-shot calls). |
